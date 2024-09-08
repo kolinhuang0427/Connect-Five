@@ -115,13 +115,11 @@ class MinimaxAgent():
                     #print("this state's value is", value)
                     possibleact += [(action, nextValue)]
                 if v >= b : 
-                    if depth == self.depth: print("PRUNED, The set of considered actions were:", possibleact, "The AI chose", action, "with value", v)
                     return v, action
                 a = max (a,v)
                 if nextValue > best:
                     best = nextValue
                     theaction = action
-            if depth == self.depth: print("NORMAL, The set of considered actions were:", possibleact, "The AI chose", theaction, "with value", v)
             return v, theaction
         
         def minimizer (gameState, depth, a, b) :
@@ -152,5 +150,4 @@ class MinimaxAgent():
             return v
         
         value, action = maximizer(gameState, self.depth, float("-inf"), float("inf"))
-        print("the value for this action is", value)
         return action

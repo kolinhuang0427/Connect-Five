@@ -1,1 +1,3 @@
 # Connect-Five
+This project builds a bot to play the game Connect Five, where the two players take turns placing pieces onto a gameboard (16 x 16 in this project) and wins if they manage to connect five pieces in a row (vertically, horizontally, diagonally). The connect_five.py file is a implementation of the game; the miniMaxAgent.py file implements an miniMax agent to play the game against; the play.py file is the file run to play a game. 
+To play game: type 'python3 play.py' in terminal.  
