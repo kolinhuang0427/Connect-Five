@@ -16,7 +16,7 @@ class Grid :
         self.data = [[initialValue for y in range(height)] for x in range(width)]
         self.isLose = False
         self.isWin = False
-
+  
     def __eq__(self, __value: object) -> bool:
         if __value == None:
             return False
