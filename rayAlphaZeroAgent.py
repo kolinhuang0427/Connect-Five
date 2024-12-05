@@ -263,7 +263,7 @@ class MCTS:
             action_probs[child.action_taken] = child.visit_count
         action_probs /= np.sum(action_probs)
         return action_probs
-        
+@ray.remote  
 class AlphaZero:
     def __init__(self, model, optimizer, game, args):
         self.model = model
@@ -271,7 +271,7 @@ class AlphaZero:
         self.game = game
         self.args = args
         self.mcts = MCTS(game, args, model)
-        
+    @ray.remote
     def selfPlay(self):
         memory = []
         player = 1
@@ -302,7 +302,7 @@ class AlphaZero:
                 return returnMemory
             
             player = self.game.get_opponent(player)
-                
+    @ray.remote    
     def train(self, memory):
         random.shuffle(memory)
         for batchIdx in range(0, len(memory), self.args['batch_size']):
@@ -327,7 +327,7 @@ class AlphaZero:
             self.optimizer.zero_grad()
             loss.backward()
             self.optimizer.step()
-    
+    @ray.remote
     def learn(self):
         for iteration in range(self.args['num_iterations']):
             memory = []
@@ -335,7 +335,7 @@ class AlphaZero:
             self.model.eval()
             for selfPlay_iteration in trange(self.args['num_selfPlay_iterations'] // self.args['num_parallel_games']):
                 futures = []
-                for _ in self.args['num_parallel_games']:
+                for _ in range(self.args['num_parallel_games']):
                     futures.append(self.selfPlay.remote())
                 memory += ray.get(futures)
                 
@@ -355,7 +355,7 @@ model = ResNet(game, 9, 128, device)
 optimizer = torch.optim.Adam(model.parameters(), lr=0.001, weight_decay=0.0001)
 
 model_checkpoint_path = "model_1_<__main__.ConnectFive object at 0x705822c4e8a0>.pt"
-optimizer_checkpoint_path = "optimizer_1_<__main__.ConnectFive object at 0x705822c4e8a0>.pt'"
+optimizer_checkpoint_path = "optimizer_1_<__main__.ConnectFive object at 0x705822c4e8a0>.pt"
 
 model.load_state_dict(torch.load(model_checkpoint_path, weights_only=True))
 optimizer.load_state_dict(torch.load(optimizer_checkpoint_path, weights_only=True))
