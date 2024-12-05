@@ -373,5 +373,6 @@ args = {
     'dirichlet_alpha': 0.03
 }
 
-alphaZero = AlphaZero(model, optimizer, game, args)
+alphaZero = AlphaZero.remote(model, optimizer, game, args)
 alphaZero.learn()
+print("training done.")
