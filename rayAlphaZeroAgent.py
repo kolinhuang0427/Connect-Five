@@ -287,6 +287,7 @@ class AlphaZeroParallel:
         return self.game
    
     def selfPlay(self):
+        self.model.eval()
         return_memory = []
         player = 1
         spGames = [SPG(self.game) for spg in range(self.args['num_parallel_games'])]
@@ -330,30 +331,42 @@ class AlphaZeroParallel:
         return return_memory
                 
     def train(self, memory):
-        random.shuffle(memory)
-        for batchIdx in range(0, len(memory), self.args['batch_size']):
-            try:
-                sample = memory[batchIdx:min(len(memory) - 1, batchIdx + self.args['batch_size'])] # Change to memory[batchIdx:batchIdx+self.args['batch_size']] in case of an error
-                state, policy_targets, value_targets = zip(*sample)
-            except:
-                 sample = memory[batchIdx:batchIdx+self.args['batch_size']]
-                 state, policy_targets, value_targets = zip(*sample)
-            state, policy_targets, value_targets = np.array(state), np.array(policy_targets), np.array(value_targets).reshape(-1, 1)
-            
-            state = torch.tensor(state, dtype=torch.float32, device=self.model.device)
-            policy_targets = torch.tensor(policy_targets, dtype=torch.float32, device=self.model.device)
-            value_targets = torch.tensor(value_targets, dtype=torch.float32, device=self.model.device)
-            
-            out_policy, out_value = self.model(state)
-            
-            policy_loss = F.cross_entropy(out_policy, policy_targets)
-            value_loss = F.mse_loss(out_value, value_targets)
-            loss = policy_loss + value_loss
-            
-            self.optimizer.zero_grad()
-            loss.backward()
-            self.optimizer.step()
-    
+        self.model.eval()
+        for epoch in range(args['num_epochs']):
+            start_time = time.time()
+            random.shuffle(memory)
+            for batchIdx in range(0, len(memory), self.args['batch_size']):
+                try:
+                    sample = memory[batchIdx:min(len(memory) - 1, batchIdx + self.args['batch_size'])] # Change to memory[batchIdx:batchIdx+self.args['batch_size']] in case of an error
+                    state, policy_targets, value_targets = zip(*sample)
+                except:
+                    sample = memory[batchIdx:batchIdx+self.args['batch_size']]
+                    state, policy_targets, value_targets = zip(*sample)
+                state, policy_targets, value_targets = np.array(state), np.array(policy_targets), np.array(value_targets).reshape(-1, 1)
+                
+                state = torch.tensor(state, dtype=torch.float32, device=self.model.device)
+                policy_targets = torch.tensor(policy_targets, dtype=torch.float32, device=self.model.device)
+                value_targets = torch.tensor(value_targets, dtype=torch.float32, device=self.model.device)
+                
+                out_policy, out_value = self.model(state)
+                
+                policy_loss = F.cross_entropy(out_policy, policy_targets)
+                value_loss = F.mse_loss(out_value, value_targets)
+                loss = policy_loss + value_loss
+                
+                self.optimizer.zero_grad()
+                loss.backward()
+                self.optimizer.step()
+
+                time_used = time.time() - start_time
+
+                print(f"Epoch {epoch} / {args['num_epochs']} Allocated memory: {torch.cuda.memory_allocated() / 1024**2:.2f} MB, Time Elapsed: {time_used:.4f}")
+                #send_email(f"Epoch {epoch} / {args['num_epochs']} Allocated memory: {torch.cuda.memory_allocated() / 1024**2:.2f} MB, Time Elapsed: {time_used:.4f}")
+        
+        timestamp = time.strftime("%Y%m%d-%H%M%S")
+        torch.save(model.state_dict(), f"model_{iteration}_{game}_{timestamp}.pt")
+        torch.save(optimizer.state_dict(), f"optimizer_{iteration}_{game}_{timestamp}.pt")
+        send_email(f"iteration {iteration} done!")
     
 class SPG:
     def __init__(self, game):
@@ -391,28 +404,16 @@ args = {
 alphaZero = AlphaZeroParallel.remote(model, optimizer, game, args)
 
 for iteration in range(args['num_iterations']):
-    memory = []
     
-    model.eval()
     futures = []
-
     for alphazeroPlay_iteration in range(args['num_selfPlay_iterations'] // args['num_parallel_games']):
         futures.append(alphaZero.selfPlay.remote())
-    
     results = ray.get(futures)
+
+    memory = []
     for i in range(len(results)):
         memory += results[i]
+    
+    alphaZero.train.remote(memory)
         
-    model.train()
-    for epoch in range(args['num_epochs']):
-        start_time = time.time()
-        alphaZero.train.remote(memory)
-        time_used = time.time() - start_time
-
-        print(f"Epoch {epoch} / {args['num_epochs']} Allocated memory: {torch.cuda.memory_allocated() / 1024**2:.2f} MB, Time Elapsed: {time_used:.4f}")
-        #send_email(f"Epoch {epoch} / {args['num_epochs']} Allocated memory: {torch.cuda.memory_allocated() / 1024**2:.2f} MB, Time Elapsed: {time_used:.4f}")
-
-    timestamp = time.strftime("%Y%m%d-%H%M%S")
-    torch.save(model.state_dict(), f"model_{iteration}_{game}_{timestamp}.pt")
-    torch.save(optimizer.state_dict(), f"optimizer_{iteration}_{game}_{timestamp}.pt")
-    send_email(f"iteration {iteration} done!")
+    
