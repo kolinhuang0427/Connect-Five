@@ -342,7 +342,7 @@ class AlphaZeroParallel:
             self.optimizer.zero_grad()
             loss.backward()
             self.optimizer.step()
-    
+    @ray.remote
     def learn(self):
         for iteration in range(self.args['num_iterations']):
             memory = []
@@ -403,5 +403,5 @@ args = {
     'dirichlet_alpha': 0.03
 }
 
-alphaZero = AlphaZeroParallel(model, optimizer, game, args)
-alphaZero.learn()
+alphaZero = AlphaZeroParallel.remote(model, optimizer, game, args)
+alphaZero.learn.remote()
