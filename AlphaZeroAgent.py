@@ -353,7 +353,7 @@ class AlphaZeroParallel:
             for selfPlay_iteration in range(self.args['num_selfPlay_iterations'] // self.args['num_parallel_games']):
                 start_time = time.time()
                 memory += self.selfPlay()
-                time_used = start_time - time.time()
+                time_used = time.time() - start_time
 
                 print(f"Game {selfPlay_iteration * self.args['num_parallel_games']}/{(selfPlay_iteration+1) * self.args['num_parallel_games']} Allocated memory: {torch.cuda.memory_allocated() / 1024**2:.2f} MB, Time Elapsed: {time_used:.4f}")
                 send_email(f"Game {selfPlay_iteration * self.args['num_parallel_games']}/{(selfPlay_iteration+1) * self.args['num_parallel_games']} Allocated memory: {torch.cuda.memory_allocated() / 1024**2:.2f} MB, Time Elapsed: {time_used:.4f}")
@@ -361,7 +361,7 @@ class AlphaZeroParallel:
             for epoch in range(self.args['num_epochs']):
                 start_time = time.time()
                 self.train(memory)
-                time_used = start_time - time.time()
+                time_used = time.time() - start_time
 
                 print(f"Epoch {epoch} / {self.args['num_epochs']} Allocated memory: {torch.cuda.memory_allocated() / 1024**2:.2f} MB, Time Elapsed: {time_used:.4f}")
                 #send_email(f"Epoch {epoch} / {self.args['num_epochs']} Allocated memory: {torch.cuda.memory_allocated() / 1024**2:.2f} MB, Time Elapsed: {time_used:.4f}")

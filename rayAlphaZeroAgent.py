@@ -12,14 +12,11 @@ import torch.nn.functional as F
 torch.manual_seed(0)
 
 from tqdm.notebook import trange
-
+from send_email import send_email
 import random
 import math
 import ray
-
-# Initialize Ray
-ray.init(num_gpus=1)
-
+ray.init(address='auto')
 
 class ConnectFive:
     def __init__(self):
@@ -91,10 +88,6 @@ class ConnectFive:
     def change_perspective(self, state, player):
         return state * player
 
-
-# In[3]:
-
-
 class ResNet(nn.Module):
     def __init__(self, game, num_resBlocks, num_hidden, device):
         super().__init__()
@@ -136,8 +129,7 @@ class ResNet(nn.Module):
         policy = self.policyHead(x)
         value = self.valueHead(x)
         return policy, value
-        
-        
+          
 class ResBlock(nn.Module):
     def __init__(self, num_hidden):
         super().__init__()
@@ -153,7 +145,7 @@ class ResBlock(nn.Module):
         x += residual
         x = F.relu(x)
         return x
-    
+        
 class Node:
     def __init__(self, game, args, state, parent=None, action_taken=None, prior=0, visit_count=0):
         self.game = game
@@ -210,99 +202,121 @@ class Node:
         if self.parent is not None:
             self.parent.backpropagate(value)  
 
-
-class MCTS:
+class MCTSParallel:
     def __init__(self, game, args, model):
         self.game = game
         self.args = args
         self.model = model
         
     @torch.no_grad()
-    def search(self, state):
-        root = Node(self.game, self.args, state, visit_count=1)
-        
+    def search(self, states, spGames):
         policy, _ = self.model(
-            torch.tensor(self.game.get_encoded_state(state), device=self.model.device).unsqueeze(0)
+            torch.tensor(self.game.get_encoded_state(states), device=self.model.device)
         )
-        policy = torch.softmax(policy, axis=1).squeeze(0).cpu().numpy()
+        policy = torch.softmax(policy, axis=1).cpu().numpy()
         policy = (1 - self.args['dirichlet_epsilon']) * policy + self.args['dirichlet_epsilon'] \
-            * np.random.dirichlet([self.args['dirichlet_alpha']] * self.game.action_size)
+            * np.random.dirichlet([self.args['dirichlet_alpha']] * self.game.action_size, size=policy.shape[0])
         
-        valid_moves = self.game.get_valid_moves(state)
-        policy *= valid_moves
-        policy /= np.sum(policy)
-        root.expand(policy)
+        for i, spg in enumerate(spGames):
+            spg_policy = policy[i]
+            valid_moves = self.game.get_valid_moves(states[i])
+            spg_policy *= valid_moves
+            spg_policy /= np.sum(spg_policy)
+
+            spg.root = Node(self.game, self.args, states[i], visit_count=1)
+            spg.root.expand(spg_policy)
         
         for search in range(self.args['num_searches']):
-            node = root
-            
-            while node.is_fully_expanded():
-                node = node.select()
+            for spg in spGames:
+                spg.node = None
+                node = spg.root
+
+                while node.is_fully_expanded():
+                    node = node.select()
+
+                value, is_terminal = self.game.get_value_and_terminated(node.state, node.action_taken)
+                value = self.game.get_opponent_value(value)
                 
-            value, is_terminal = self.game.get_value_and_terminated(node.state, node.action_taken)
-            value = self.game.get_opponent_value(value)
-            
-            if not is_terminal:
+                if is_terminal:
+                    node.backpropagate(value)
+                    
+                else:
+                    spg.node = node
+                    
+            expandable_spGames = [mappingIdx for mappingIdx in range(len(spGames)) if spGames[mappingIdx].node is not None]
+                    
+            if len(expandable_spGames) > 0:
+                states = np.stack([spGames[mappingIdx].node.state for mappingIdx in expandable_spGames])
+                
                 policy, value = self.model(
-                    torch.tensor(self.game.get_encoded_state(node.state), device=self.model.device).unsqueeze(0)
+                    torch.tensor(self.game.get_encoded_state(states), device=self.model.device)
                 )
-                policy = torch.softmax(policy, axis=1).squeeze(0).cpu().numpy()
+                policy = torch.softmax(policy, axis=1).cpu().numpy()
+                value = value.cpu().numpy()
+                
+            for i, mappingIdx in enumerate(expandable_spGames):
+                node = spGames[mappingIdx].node
+                spg_policy, spg_value = policy[i], value[i]
+                
                 valid_moves = self.game.get_valid_moves(node.state)
-                policy *= valid_moves
-                policy /= np.sum(policy)
-                
-                value = value.item()
-                
-                node.expand(policy)
-                
-            node.backpropagate(value)    
-            
-            
-        action_probs = np.zeros(self.game.action_size)
-        for child in root.children:
-            action_probs[child.action_taken] = child.visit_count
-        action_probs /= np.sum(action_probs)
-        return action_probs
-@ray.remote  
-class AlphaZero:
+                spg_policy *= valid_moves
+                spg_policy /= np.sum(spg_policy)
+
+                node.expand(spg_policy)
+                node.backpropagate(spg_value)
+
+class AlphaZeroParallel:
     def __init__(self, model, optimizer, game, args):
         self.model = model
         self.optimizer = optimizer
         self.game = game
         self.args = args
-        self.mcts = MCTS(game, args, model)
+        self.mcts = MCTSParallel(game, args, model)
+    
     @ray.remote
     def selfPlay(self):
-        memory = []
+        return_memory = []
         player = 1
-        state = self.game.get_initial_state()
+        spGames = [SPG(self.game) for spg in range(self.args['num_parallel_games'])]
         
-        while True:
-            neutral_state = self.game.change_perspective(state, player)
-            action_probs = self.mcts.search(neutral_state)
+        while len(spGames) > 0:
+            states = np.stack([spg.state for spg in spGames])
+            neutral_states = self.game.change_perspective(states, player)
             
-            memory.append((neutral_state, action_probs, player))
+            self.mcts.search(neutral_states, spGames)
             
-            temperature_action_probs = action_probs ** (1 / self.args['temperature'])
-            action = np.random.choice(self.game.action_size, p=temperature_action_probs) # Divide temperature_action_probs with its sum in case of an error
-            
-            state = self.game.get_next_state(state, action, player)
-            
-            value, is_terminal = self.game.get_value_and_terminated(state, action)
-            
-            if is_terminal:
-                returnMemory = []
-                for hist_neutral_state, hist_action_probs, hist_player in memory:
-                    hist_outcome = value if hist_player == player else self.game.get_opponent_value(value)
-                    returnMemory.append((
-                        self.game.get_encoded_state(hist_neutral_state),
-                        hist_action_probs,
-                        hist_outcome
-                    ))
-                return returnMemory
-            
+            for i in range(len(spGames))[::-1]:
+                spg = spGames[i]
+                
+                action_probs = np.zeros(self.game.action_size)
+                for child in spg.root.children:
+                    action_probs[child.action_taken] = child.visit_count
+                action_probs /= np.sum(action_probs)
+
+                spg.memory.append((spg.root.state, action_probs, player))
+
+                temperature_action_probs = action_probs ** (1 / self.args['temperature'])
+                temperature_action_probs /= np.sum(temperature_action_probs)
+                action = np.random.choice(self.game.action_size, p=temperature_action_probs) # Divide temperature_action_probs with its sum in case of an error
+
+                spg.state = self.game.get_next_state(spg.state, action, player)
+
+                value, is_terminal = self.game.get_value_and_terminated(spg.state, action)
+
+                if is_terminal:
+                    for hist_neutral_state, hist_action_probs, hist_player in spg.memory:
+                        hist_outcome = value if hist_player == player else self.game.get_opponent_value(value)
+                        return_memory.append((
+                            self.game.get_encoded_state(hist_neutral_state),
+                            hist_action_probs,
+                            hist_outcome
+                        ))
+                    del spGames[i]
+                    
             player = self.game.get_opponent(player)
-    @ray.remote    
+            
+        return return_memory
+                
     def train(self, memory):
         random.shuffle(memory)
         for batchIdx in range(0, len(memory), self.args['batch_size']):
@@ -327,25 +341,38 @@ class AlphaZero:
             self.optimizer.zero_grad()
             loss.backward()
             self.optimizer.step()
-    @ray.remote
+    
     def learn(self):
         for iteration in range(self.args['num_iterations']):
             memory = []
             
             self.model.eval()
-            for selfPlay_iteration in trange(self.args['num_selfPlay_iterations'] // self.args['num_parallel_games']):
-                futures = []
-                for _ in range(self.args['num_parallel_games']):
-                    futures.append(self.selfPlay.remote())
-                memory += ray.get(futures)
-                
-            self.model.train()
-            for epoch in trange(self.args['num_epochs']):
-                self.train(memory)
+            futures = []
+            for selfPlay_iteration in range(self.args['num_selfPlay_iterations'] // self.args['num_parallel_games']):
+                futures.append(self.selfPlay.remote())
             
+            results = ray.get(futures)
+            for i in range(len(results)):
+                memory += results[i]
+            self.model.train()
+            for epoch in range(self.args['num_epochs']):
+                start_time = time.time()
+                self.train(memory)
+                time_used = time.time() - start_time
+
+                print(f"Epoch {epoch} / {self.args['num_epochs']} Allocated memory: {torch.cuda.memory_allocated() / 1024**2:.2f} MB, Time Elapsed: {time_used:.4f}")
+                #send_email(f"Epoch {epoch} / {self.args['num_epochs']} Allocated memory: {torch.cuda.memory_allocated() / 1024**2:.2f} MB, Time Elapsed: {time_used:.4f}")
+
             timestamp = time.strftime("%Y%m%d-%H%M%S")
             torch.save(self.model.state_dict(), f"model_{iteration}_{self.game}_{timestamp}.pt")
             torch.save(self.optimizer.state_dict(), f"optimizer_{iteration}_{self.game}_{timestamp}.pt")
+            send_email(f"iteration {iteration} done!")
+class SPG:
+    def __init__(self, game):
+        self.state = game.get_initial_state()
+        self.memory = []
+        self.root = None
+        self.node = None
 
 game = ConnectFive()
 
@@ -365,7 +392,7 @@ args = {
     'num_searches': 800,
     'num_iterations': 20,
     'num_selfPlay_iterations': 500,
-    'num_parallel_games': 100,
+    'num_parallel_games': 125,
     'num_epochs': 4,
     'batch_size': 128,
     'temperature': 1.25,
@@ -373,6 +400,5 @@ args = {
     'dirichlet_alpha': 0.03
 }
 
-alphaZero = AlphaZero.remote(model, optimizer, game, args)
+alphaZero = AlphaZeroParallel(model, optimizer, game, args)
 alphaZero.learn()
-print("training done.")
