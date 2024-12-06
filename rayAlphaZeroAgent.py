@@ -389,10 +389,6 @@ args = {
 }
 
 alphaZero = AlphaZeroParallel.remote(model, optimizer, game, args)
-args = ray.get(alphaZero.get_args.remote())
-model = ray.get(alphaZero.get_model.remote())
-optimizer = ray.get(alphaZero.get_optimizer.remote())
-game = ray.get(alphaZero.get_game.remote())
 
 for iteration in range(args['num_iterations']):
     memory = []
