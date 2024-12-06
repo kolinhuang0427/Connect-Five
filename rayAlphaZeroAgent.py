@@ -16,7 +16,7 @@ from send_email import send_email
 import random
 import math
 import ray
-ray.init(num_gpus=1)
+ray.init(address='auto')
 
 class ConnectFive:
     def __init__(self):
