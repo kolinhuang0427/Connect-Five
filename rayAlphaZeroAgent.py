@@ -274,7 +274,7 @@ class AlphaZeroParallel:
         self.args = args
         self.mcts = MCTSParallel(game, args, model)
     
-    @ray.remote
+   
     def selfPlay(self):
         return_memory = []
         player = 1
@@ -342,34 +342,8 @@ class AlphaZeroParallel:
             self.optimizer.zero_grad()
             loss.backward()
             self.optimizer.step()
-    @ray.remote
-    def learn(self):
-        for iteration in range(self.args['num_iterations']):
-            memory = []
-            
-            self.model.eval()
-            futures = []
-
-            for selfPlay_iteration in range(self.args['num_selfPlay_iterations'] // self.args['num_parallel_games']):
-                futures.append(self.selfPlay.remote())
-            
-            results = ray.get(futures)
-            for i in range(len(results)):
-                memory += results[i]
-                
-            self.model.train()
-            for epoch in range(self.args['num_epochs']):
-                start_time = time.time()
-                self.train(memory)
-                time_used = time.time() - start_time
-
-                print(f"Epoch {epoch} / {self.args['num_epochs']} Allocated memory: {torch.cuda.memory_allocated() / 1024**2:.2f} MB, Time Elapsed: {time_used:.4f}")
-                #send_email(f"Epoch {epoch} / {self.args['num_epochs']} Allocated memory: {torch.cuda.memory_allocated() / 1024**2:.2f} MB, Time Elapsed: {time_used:.4f}")
-
-            timestamp = time.strftime("%Y%m%d-%H%M%S")
-            torch.save(self.model.state_dict(), f"model_{iteration}_{self.game}_{timestamp}.pt")
-            torch.save(self.optimizer.state_dict(), f"optimizer_{iteration}_{self.game}_{timestamp}.pt")
-            send_email(f"iteration {iteration} done!")
+    
+    
 class SPG:
     def __init__(self, game):
         self.state = game.get_initial_state()
@@ -404,4 +378,30 @@ args = {
 }
 
 alphaZero = AlphaZeroParallel.remote(model, optimizer, game, args)
-ray.get(alphaZero.learn.remote())
+
+for iteration in range(alphaZero.args['num_iterations']):
+    memory = []
+    
+    alphaZero.model.eval()
+    futures = []
+
+    for alphazeroPlay_iteration in range(alphaZero.args['num_selfPlay_iterations'] // alphaZero.args['num_parallel_games']):
+        futures.append(alphaZero.selfPlay.remote())
+    
+    results = ray.get(futures)
+    for i in range(len(results)):
+        memory += results[i]
+        
+    alphaZero.model.train()
+    for epoch in range(alphaZero.args['num_epochs']):
+        start_time = time.time()
+        alphaZero.train(memory)
+        time_used = time.time() - start_time
+
+        print(f"Epoch {epoch} / {alphaZero.args['num_epochs']} Allocated memory: {torch.cuda.memory_allocated() / 1024**2:.2f} MB, Time Elapsed: {time_used:.4f}")
+        #send_email(f"Epoch {epoch} / {alphaZero.args['num_epochs']} Allocated memory: {torch.cuda.memory_allocated() / 1024**2:.2f} MB, Time Elapsed: {time_used:.4f}")
+
+    timestamp = time.strftime("%Y%m%d-%H%M%S")
+    torch.save(alphaZero.model.state_dict(), f"model_{iteration}_{alphaZero.game}_{timestamp}.pt")
+    torch.save(alphaZero.optimizer.state_dict(), f"optimizer_{iteration}_{alphaZero.game}_{timestamp}.pt")
+    send_email(f"iteration {iteration} done!")
