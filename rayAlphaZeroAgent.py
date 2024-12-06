@@ -404,4 +404,4 @@ args = {
 }
 
 alphaZero = AlphaZeroParallel.remote(model, optimizer, game, args)
-alphaZero.learn.remote()
+ray.get(alphaZero.learn.remote())
