@@ -265,6 +265,7 @@ class MCTSParallel:
                 node.expand(spg_policy)
                 node.backpropagate(spg_value)
 
+@ray.remote
 class AlphaZeroParallel:
     def __init__(self, model, optimizer, game, args):
         self.model = model
@@ -348,12 +349,14 @@ class AlphaZeroParallel:
             
             self.model.eval()
             futures = []
+
             for selfPlay_iteration in range(self.args['num_selfPlay_iterations'] // self.args['num_parallel_games']):
                 futures.append(self.selfPlay.remote())
             
             results = ray.get(futures)
             for i in range(len(results)):
                 memory += results[i]
+                
             self.model.train()
             for epoch in range(self.args['num_epochs']):
                 start_time = time.time()
