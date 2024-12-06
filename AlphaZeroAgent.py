@@ -12,7 +12,7 @@ import torch.nn.functional as F
 torch.manual_seed(0)
 
 from tqdm.notebook import trange
-
+from send_email import send_email
 import random
 import math
 
@@ -346,7 +346,7 @@ class AlphaZeroParallel:
             self.optimizer.step()
     
     def learn(self):
-        for iteration in trange(self.args['num_iterations']):
+        for iteration in range(self.args['num_iterations']):
             memory = []
             
             self.model.eval()
@@ -355,20 +355,21 @@ class AlphaZeroParallel:
                 memory += self.selfPlay()
                 time_used = start_time - time.time()
 
-                print(f"Game {selfPlay_iteration * self.args['num_parallel_games']}-{(selfPlay_iteration+1) * self.args['num_parallel_games']} Allocated memory: {torch.cuda.memory_allocated() / 1024**2:.2f} MB, Time Elapsed: {time_used:.4f}")
-
+                print(f"Game {selfPlay_iteration * self.args['num_parallel_games']}/{(selfPlay_iteration+1) * self.args['num_parallel_games']} Allocated memory: {torch.cuda.memory_allocated() / 1024**2:.2f} MB, Time Elapsed: {time_used:.4f}")
+                send_email(f"Game {selfPlay_iteration * self.args['num_parallel_games']}/{(selfPlay_iteration+1) * self.args['num_parallel_games']} Allocated memory: {torch.cuda.memory_allocated() / 1024**2:.2f} MB, Time Elapsed: {time_used:.4f}")
             self.model.train()
             for epoch in range(self.args['num_epochs']):
                 start_time = time.time()
                 self.train(memory)
                 time_used = start_time - time.time()
 
-                print(f"Allocated memory: {torch.cuda.memory_allocated() / 1024**2:.2f} MB, Time Elapsed: {time_used:.4f}")
+                print(f"Epoch {epoch} / {self.args['num_epochs']} Allocated memory: {torch.cuda.memory_allocated() / 1024**2:.2f} MB, Time Elapsed: {time_used:.4f}")
+                #send_email(f"Epoch {epoch} / {self.args['num_epochs']} Allocated memory: {torch.cuda.memory_allocated() / 1024**2:.2f} MB, Time Elapsed: {time_used:.4f}")
 
             timestamp = time.strftime("%Y%m%d-%H%M%S")
             torch.save(self.model.state_dict(), f"model_{iteration}_{self.game}_{timestamp}.pt")
             torch.save(self.optimizer.state_dict(), f"optimizer_{iteration}_{self.game}_{timestamp}.pt")
-            
+            send_email(f"iteration {iteration} done!")
 class SPG:
     def __init__(self, game):
         self.state = game.get_initial_state()
@@ -384,7 +385,7 @@ model = ResNet(game, 9, 128, device)
 optimizer = torch.optim.Adam(model.parameters(), lr=0.001, weight_decay=0.0001)
 
 model_checkpoint_path = "model_1_<__main__.ConnectFive object at 0x705822c4e8a0>.pt"
-optimizer_checkpoint_path = "optimizer_1_<__main__.ConnectFive object at 0x705822c4e8a0>.pt'"
+optimizer_checkpoint_path = "optimizer_1_<__main__.ConnectFive object at 0x705822c4e8a0>.pt"
 
 model.load_state_dict(torch.load(model_checkpoint_path, weights_only=True))
 optimizer.load_state_dict(torch.load(optimizer_checkpoint_path, weights_only=True))
