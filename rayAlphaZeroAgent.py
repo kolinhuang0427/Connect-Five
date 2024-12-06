@@ -274,6 +274,17 @@ class AlphaZeroParallel:
         self.args = args
         self.mcts = MCTSParallel(game, args, model)
     
+    def get_args(self):
+        return self.args
+    
+    def get_model(self):
+        return self.model
+    
+    def get_optimizer(self):
+        return self.optimizer
+    
+    def get_game(self):
+        return self.game
    
     def selfPlay(self):
         return_memory = []
@@ -366,10 +377,10 @@ optimizer.load_state_dict(torch.load(optimizer_checkpoint_path, weights_only=Tru
 
 args = {
     'C': 2,
-    'num_searches': 800,
-    'num_iterations': 20,
-    'num_selfPlay_iterations': 500,
-    'num_parallel_games': 125,
+    'num_searches': 2,
+    'num_iterations': 2,
+    'num_selfPlay_iterations': 10,
+    'num_parallel_games': 5,
     'num_epochs': 4,
     'batch_size': 128,
     'temperature': 1.25,
@@ -378,30 +389,34 @@ args = {
 }
 
 alphaZero = AlphaZeroParallel.remote(model, optimizer, game, args)
+args = ray.get(alphaZero.get_args.remote())
+model = ray.get(alphaZero.get_model.remote())
+optimizer = ray.get(alphaZero.get_optimizer.remote())
+game = ray.get(alphaZero.get_game.remote())
 
-for iteration in range(alphaZero.args['num_iterations']):
+for iteration in range(args['num_iterations']):
     memory = []
     
-    alphaZero.model.eval()
+    model.eval()
     futures = []
 
-    for alphazeroPlay_iteration in range(alphaZero.args['num_selfPlay_iterations'] // alphaZero.args['num_parallel_games']):
+    for alphazeroPlay_iteration in range(args['num_selfPlay_iterations'] // args['num_parallel_games']):
         futures.append(alphaZero.selfPlay.remote())
     
     results = ray.get(futures)
     for i in range(len(results)):
         memory += results[i]
         
-    alphaZero.model.train()
-    for epoch in range(alphaZero.args['num_epochs']):
+    model.train()
+    for epoch in range(args['num_epochs']):
         start_time = time.time()
-        alphaZero.train(memory)
+        alphaZero.train.remote(memory)
         time_used = time.time() - start_time
 
-        print(f"Epoch {epoch} / {alphaZero.args['num_epochs']} Allocated memory: {torch.cuda.memory_allocated() / 1024**2:.2f} MB, Time Elapsed: {time_used:.4f}")
-        #send_email(f"Epoch {epoch} / {alphaZero.args['num_epochs']} Allocated memory: {torch.cuda.memory_allocated() / 1024**2:.2f} MB, Time Elapsed: {time_used:.4f}")
+        print(f"Epoch {epoch} / {args['num_epochs']} Allocated memory: {torch.cuda.memory_allocated() / 1024**2:.2f} MB, Time Elapsed: {time_used:.4f}")
+        #send_email(f"Epoch {epoch} / {args['num_epochs']} Allocated memory: {torch.cuda.memory_allocated() / 1024**2:.2f} MB, Time Elapsed: {time_used:.4f}")
 
     timestamp = time.strftime("%Y%m%d-%H%M%S")
-    torch.save(alphaZero.model.state_dict(), f"model_{iteration}_{alphaZero.game}_{timestamp}.pt")
-    torch.save(alphaZero.optimizer.state_dict(), f"optimizer_{iteration}_{alphaZero.game}_{timestamp}.pt")
+    torch.save(model.state_dict(), f"model_{iteration}_{game}_{timestamp}.pt")
+    torch.save(optimizer.state_dict(), f"optimizer_{iteration}_{game}_{timestamp}.pt")
     send_email(f"iteration {iteration} done!")
