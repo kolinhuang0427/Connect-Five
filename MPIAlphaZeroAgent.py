@@ -13,6 +13,10 @@ torch.manual_seed(0)
 from send_email import send_email
 import random
 import math
+from mpi4py import MPI
+comm = MPI.COMM_WORLD
+rank = comm.Get_rank()  # Process rank (0 or 1 in our case)
+size = comm.Get_size()  # Total number of processes
 
 class ConnectFive:
     def __init__(self):
@@ -278,12 +282,17 @@ class AlphaZeroParallel:
     def selfPlay(self):
         return_memory = []
         player = 1
-        spGames = [SPG(self.game) for spg in range(self.args['num_parallel_games'])]
+        total_games = self.args['num_parallel_games']
+        
+        # Split games across processes
+        local_num_games = total_games // size
+        spGames = [SPG(self.game) for _ in range(local_num_games)]
         
         while len(spGames) > 0:
             states = np.stack([spg.state for spg in spGames])
             neutral_states = self.game.change_perspective(states, player)
             
+            # Perform MCTS search locally
             self.mcts.search(neutral_states, spGames)
             
             for i in range(len(spGames))[::-1]:
@@ -298,7 +307,7 @@ class AlphaZeroParallel:
 
                 temperature_action_probs = action_probs ** (1 / self.args['temperature'])
                 temperature_action_probs /= np.sum(temperature_action_probs)
-                action = np.random.choice(self.game.action_size, p=temperature_action_probs) # Divide temperature_action_probs with its sum in case of an error
+                action = np.random.choice(self.game.action_size, p=temperature_action_probs)
 
                 spg.state = self.game.get_next_state(spg.state, action, player)
 
@@ -315,8 +324,19 @@ class AlphaZeroParallel:
                     del spGames[i]
                     
             player = self.game.get_opponent(player)
-            
-        return return_memory
+        
+        # Gather results from all processes
+        all_return_memory = comm.gather(return_memory, root=0)
+        
+        if rank == 0:
+            # Combine data from all processes
+            all_return_memory = sum(all_return_memory, [])
+        
+        # Broadcast combined data to all processes
+        all_return_memory = comm.bcast(all_return_memory, root=0)
+        
+        return all_return_memory
+
                 
     def train(self, memory):
         random.shuffle(memory)
@@ -363,7 +383,12 @@ class AlphaZeroParallel:
 
                 print(f"Epoch {epoch} / {self.args['num_epochs']} Allocated memory: {torch.cuda.memory_allocated() / 1024**2:.2f} MB, Time Elapsed: {time_used:.4f}")
                 #send_email(f"Epoch {epoch} / {self.args['num_epochs']} Allocated memory: {torch.cuda.memory_allocated() / 1024**2:.2f} MB, Time Elapsed: {time_used:.4f}")
-
+            if rank == 0:
+                weights = model.state_dict()
+            else:
+                weights = None
+            weights = comm.bcast(weights, root=0)
+            model.load_state_dict(weights)
             timestamp = time.strftime("%Y%m%d-%H%M%S")
             torch.save(self.model.state_dict(), f"model_{iteration}_{self.game}_{timestamp}.pt")
             torch.save(self.optimizer.state_dict(), f"optimizer_{iteration}_{self.game}_{timestamp}.pt")
