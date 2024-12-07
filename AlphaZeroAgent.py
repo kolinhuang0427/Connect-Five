@@ -393,7 +393,7 @@ args = {
     'num_searches': 800,
     'num_iterations': 20,
     'num_selfPlay_iterations': 500,
-    'num_parallel_games': 125,
+    'num_parallel_games': 250,
     'num_epochs': 4,
     'batch_size': 128,
     'temperature': 1.25,
