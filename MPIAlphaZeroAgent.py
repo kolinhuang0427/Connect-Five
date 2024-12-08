@@ -372,27 +372,26 @@ class AlphaZeroParallel:
                 start_time = time.time()
                 memory += self.selfPlay()
                 time_used = time.time() - start_time
-
-                print(f"Game {selfPlay_iteration * self.args['num_parallel_games']}/{(selfPlay_iteration+1) * self.args['num_parallel_games']} Allocated memory: {torch.cuda.memory_allocated() / 1024**2:.2f} MB, Time Elapsed: {time_used:.4f}")
-                send_email(f"Game {selfPlay_iteration * self.args['num_parallel_games']}/{(selfPlay_iteration+1) * self.args['num_parallel_games']} Allocated memory: {torch.cuda.memory_allocated() / 1024**2:.2f} MB, Time Elapsed: {time_used:.4f}")
-            self.model.train()
-            for epoch in range(self.args['num_epochs']):
-                start_time = time.time()
-                self.train(memory)
-                time_used = time.time() - start_time
-
-                print(f"Epoch {epoch} / {self.args['num_epochs']} Allocated memory: {torch.cuda.memory_allocated() / 1024**2:.2f} MB, Time Elapsed: {time_used:.4f}")
-                #send_email(f"Epoch {epoch} / {self.args['num_epochs']} Allocated memory: {torch.cuda.memory_allocated() / 1024**2:.2f} MB, Time Elapsed: {time_used:.4f}")
+                if rank == 0:
+                    print(f"Game {selfPlay_iteration * self.args['num_parallel_games']}/{(selfPlay_iteration+1) * self.args['num_parallel_games']} Allocated memory: {torch.cuda.memory_allocated() / 1024**2:.2f} MB, Time Elapsed: {time_used:.4f}")
+                    send_email(f"Game {selfPlay_iteration * self.args['num_parallel_games']}/{(selfPlay_iteration+1) * self.args['num_parallel_games']} Allocated memory: {torch.cuda.memory_allocated() / 1024**2:.2f} MB, Time Elapsed: {time_used:.4f}")
+            
             if rank == 0:
+                self.model.train()
+                for epoch in range(self.args['num_epochs']):
+                    start_time = time.time()
+                    self.train(memory)
+                    time_used = time.time() - start_time
+                
                 weights = model.state_dict()
+                timestamp = time.strftime("%Y%m%d-%H%M%S")
+                torch.save(self.model.state_dict(), f"model_{iteration}_{self.game}_{timestamp}.pt")
+                torch.save(self.optimizer.state_dict(), f"optimizer_{iteration}_{self.game}_{timestamp}.pt")
+                send_email(f"iteration {iteration} done!")
             else:
                 weights = None
             weights = comm.bcast(weights, root=0)
             model.load_state_dict(weights)
-            timestamp = time.strftime("%Y%m%d-%H%M%S")
-            torch.save(self.model.state_dict(), f"model_{iteration}_{self.game}_{timestamp}.pt")
-            torch.save(self.optimizer.state_dict(), f"optimizer_{iteration}_{self.game}_{timestamp}.pt")
-            send_email(f"iteration {iteration} done!")
 class SPG:
     def __init__(self, game):
         self.state = game.get_initial_state()
@@ -407,18 +406,12 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 model = ResNet(game, 9, 128, device) 
 optimizer = torch.optim.Adam(model.parameters(), lr=0.001, weight_decay=0.0001)
 
-model_checkpoint_path = "model_1_<__main__.ConnectFive object at 0x705822c4e8a0>.pt"
-optimizer_checkpoint_path = "optimizer_1_<__main__.ConnectFive object at 0x705822c4e8a0>.pt"
-
-model.load_state_dict(torch.load(model_checkpoint_path, weights_only=True))
-optimizer.load_state_dict(torch.load(optimizer_checkpoint_path, weights_only=True))
-
 args = {
     'C': 2,
     'num_searches': 800,
     'num_iterations': 20,
-    'num_selfPlay_iterations': 450,
-    'num_parallel_games': 450,
+    'num_selfPlay_iterations': 500,
+    'num_parallel_games': 125,
     'num_epochs': 4,
     'batch_size': 128,
     'temperature': 1.25,
