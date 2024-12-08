@@ -1,7 +1,7 @@
 import smtplib
 from email.mime.text import MIMEText
 
-def send_email(body, subject="AlphaZero Training Update", receiver_email="kolinhuang0428@gmail.com"):
+def send_email(body, subject="AlphaZero Training Update", receiver_email="yihuang0428@163.com"):
     # Email details
     smtp_server = "smtp.gmail.com"  # Replace with your SMTP server (e.g., smtp.gmail.com for Gmail)
     smtp_port = 587  # Common port for TLS
