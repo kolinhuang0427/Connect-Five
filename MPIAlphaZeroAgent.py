@@ -88,10 +88,6 @@ class ConnectFive:
     def change_perspective(self, state, player):
         return state * player
 
-
-# In[3]:
-
-
 class ResNet(nn.Module):
     def __init__(self, game, num_resBlocks, num_hidden, device):
         super().__init__()
@@ -382,7 +378,7 @@ class AlphaZeroParallel:
                 for epoch in range(self.args['num_epochs']):
                     self.train(memory)
                 time_used = time.time() - start_time
-                weights = model.state_dict()
+                weights = self.model.state_dict()
                 timestamp = time.strftime("%Y%m%d-%H%M%S")
                 torch.save(self.model.state_dict(), f"model_{iteration}_{self.game}_{timestamp}.pt")
                 torch.save(self.optimizer.state_dict(), f"optimizer_{iteration}_{self.game}_{timestamp}.pt")
@@ -391,7 +387,8 @@ class AlphaZeroParallel:
             else:
                 weights = None
             weights = comm.bcast(weights, root=0)
-            model.load_state_dict(weights)
+            self.model.load_state_dict(weights)
+
 class SPG:
     def __init__(self, game):
         self.state = game.get_initial_state()
@@ -399,25 +396,35 @@ class SPG:
         self.root = None
         self.node = None
 
-game = ConnectFive()
+def main():
+    game = ConnectFive()
 
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-model = ResNet(game, 9, 128, device) 
-optimizer = torch.optim.Adam(model.parameters(), lr=0.001, weight_decay=0.0001)
+    model = ResNet(game, 9, 128, device) 
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.001, weight_decay=0.0001)
 
-args = {
-    'C': 2,
-    'num_searches': 800,
-    'num_iterations': 20,
-    'num_selfPlay_iterations': 500,
-    'num_parallel_games': 125,
-    'num_epochs': 4,
-    'batch_size': 128,
-    'temperature': 1.25,
-    'dirichlet_epsilon': 0.25,
-    'dirichlet_alpha': 0.03
-}
+    model_checkpoint_path = "model_0_ConnectFive_20241209-085238.pt"
+    optimizer_checkpoint_path = "optimizer_0_ConnectFive_20241209-085238.pt"
 
-alphaZero = AlphaZeroParallel(model, optimizer, game, args)
-alphaZero.learn()
+    model.load_state_dict(torch.load(model_checkpoint_path, weights_only=True))
+    optimizer.load_state_dict(torch.load(optimizer_checkpoint_path, weights_only=True))
+
+    args = {
+        'C': 2,
+        'num_searches': 800,
+        'num_iterations': 20,
+        'num_selfPlay_iterations': 500,
+        'num_parallel_games': 125,
+        'num_epochs': 4,
+        'batch_size': 128,
+        'temperature': 1.25,
+        'dirichlet_epsilon': 0.25,
+        'dirichlet_alpha': 0.03
+    }
+
+    alphaZero = AlphaZeroParallel(model, optimizer, game, args)
+    alphaZero.learn()
+
+if __name__ == "__main__":
+    main()

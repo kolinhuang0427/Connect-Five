@@ -84,10 +84,6 @@ class ConnectFive:
     def change_perspective(self, state, player):
         return state * player
 
-
-# In[3]:
-
-
 class ResNet(nn.Module):
     def __init__(self, game, num_resBlocks, num_hidden, device):
         super().__init__()
