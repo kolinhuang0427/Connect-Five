@@ -402,7 +402,8 @@ def main():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     model = ResNet(game, 9, 128, device) 
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.001, weight_decay=0.0001)
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.2, weight_decay=0.0001)
+    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=20, gamma=0.1)
 
     model_checkpoint_path = "model_0_ConnectFive_20241209-085238.pt"
     optimizer_checkpoint_path = "optimizer_0_ConnectFive_20241209-085238.pt"
@@ -423,7 +424,7 @@ def main():
         'dirichlet_alpha': 0.03
     }
 
-    alphaZero = AlphaZeroParallel(model, optimizer, game, args)
+    alphaZero = AlphaZeroParallel(model, scheduler, game, args)
     alphaZero.learn()
 
 if __name__ == "__main__":
