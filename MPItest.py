@@ -88,10 +88,6 @@ class ConnectFive:
     def change_perspective(self, state, player):
         return state * player
 
-
-# In[3]:
-
-
 class ResNet(nn.Module):
     def __init__(self, game, num_resBlocks, num_hidden, device):
         super().__init__()
@@ -372,27 +368,27 @@ class AlphaZeroParallel:
                 start_time = time.time()
                 memory += self.selfPlay()
                 time_used = time.time() - start_time
-
-                print(f"Game {selfPlay_iteration * self.args['num_parallel_games']}/{(selfPlay_iteration+1) * self.args['num_parallel_games']} Allocated memory: {torch.cuda.memory_allocated() / 1024**2:.2f} MB, Time Elapsed: {time_used:.4f}")
-                send_email(f"Game {selfPlay_iteration * self.args['num_parallel_games']}/{(selfPlay_iteration+1) * self.args['num_parallel_games']} Allocated memory: {torch.cuda.memory_allocated() / 1024**2:.2f} MB, Time Elapsed: {time_used:.4f}")
-            self.model.train()
-            for epoch in range(self.args['num_epochs']):
-                start_time = time.time()
-                self.train(memory)
-                time_used = time.time() - start_time
-
-                print(f"Epoch {epoch} / {self.args['num_epochs']} Allocated memory: {torch.cuda.memory_allocated() / 1024**2:.2f} MB, Time Elapsed: {time_used:.4f}")
-                #send_email(f"Epoch {epoch} / {self.args['num_epochs']} Allocated memory: {torch.cuda.memory_allocated() / 1024**2:.2f} MB, Time Elapsed: {time_used:.4f}")
+                if rank == 0:
+                    print(f"Game {selfPlay_iteration * self.args['num_parallel_games']}/{(selfPlay_iteration+1) * self.args['num_parallel_games']} Allocated memory: {torch.cuda.memory_allocated() / 1024**2:.2f} MB, Time Elapsed: {time_used:.4f}")
+                    send_email(f"Game {selfPlay_iteration * self.args['num_parallel_games']}/{(selfPlay_iteration+1) * self.args['num_parallel_games']} Allocated memory: {torch.cuda.memory_allocated() / 1024**2:.2f} MB, Time Elapsed: {time_used:.4f}")
+            
             if rank == 0:
-                weights = model.state_dict()
+                start_time = time.time()
+                self.model.train()
+                for epoch in range(self.args['num_epochs']):
+                    self.train(memory)
+                time_used = time.time() - start_time
+                weights = self.model.state_dict()
+                timestamp = time.strftime("%Y%m%d-%H%M%S")
+                torch.save(self.model.state_dict(), f"model_{iteration}_{self.game}_{timestamp}.pt")
+                torch.save(self.optimizer.state_dict(), f"optimizer_{iteration}_{self.game}_{timestamp}.pt")
+                print(f"iteration {iteration} done! Time Elapsed in training: {time_used:.4f}")
+                send_email(f"iteration {iteration} done! Time Elapsed in training: {time_used:.4f}")
             else:
                 weights = None
             weights = comm.bcast(weights, root=0)
-            model.load_state_dict(weights)
-            timestamp = time.strftime("%Y%m%d-%H%M%S")
-            torch.save(self.model.state_dict(), f"model_{iteration}_{self.game}_{timestamp}.pt")
-            torch.save(self.optimizer.state_dict(), f"optimizer_{iteration}_{self.game}_{timestamp}.pt")
-            send_email(f"iteration {iteration} done!")
+            self.model.load_state_dict(weights)
+
 class SPG:
     def __init__(self, game):
         self.state = game.get_initial_state()
@@ -400,31 +396,35 @@ class SPG:
         self.root = None
         self.node = None
 
-game = ConnectFive()
+def main():
+    game = ConnectFive()
 
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-model = ResNet(game, 9, 128, device) 
-optimizer = torch.optim.Adam(model.parameters(), lr=0.001, weight_decay=0.0001)
+    model = ResNet(game, 9, 128, device) 
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.001, weight_decay=0.0001)
 
-model_checkpoint_path = "model_1_<__main__.ConnectFive object at 0x705822c4e8a0>.pt"
-optimizer_checkpoint_path = "optimizer_1_<__main__.ConnectFive object at 0x705822c4e8a0>.pt"
+    model_checkpoint_path = "model_1_<__main__.ConnectFive object at 0x705822c4e8a0>.pt"
+    optimizer_checkpoint_path = "optimizer_1_<__main__.ConnectFive object at 0x705822c4e8a0>.pt"
 
-model.load_state_dict(torch.load(model_checkpoint_path, weights_only=True))
-optimizer.load_state_dict(torch.load(optimizer_checkpoint_path, weights_only=True))
+    model.load_state_dict(torch.load(model_checkpoint_path, weights_only=True))
+    optimizer.load_state_dict(torch.load(optimizer_checkpoint_path, weights_only=True))
 
-args = {
-    'C': 2,
-    'num_searches': 800,
-    'num_iterations': 20,
-    'num_selfPlay_iterations': 500,
-    'num_parallel_games': 125,
-    'num_epochs': 4,
-    'batch_size': 128,
-    'temperature': 1.25,
-    'dirichlet_epsilon': 0.25,
-    'dirichlet_alpha': 0.03
-}
+    args = {
+        'C': 2,
+        'num_searches': 4,
+        'num_iterations': 2,
+        'num_selfPlay_iterations': 4,
+        'num_parallel_games': 2,
+        'num_epochs': 4,
+        'batch_size': 128,
+        'temperature': 1.25,
+        'dirichlet_epsilon': 0.25,
+        'dirichlet_alpha': 0.03
+    }
 
-alphaZero = AlphaZeroParallel(model, optimizer, game, args)
-alphaZero.learn()
+    alphaZero = AlphaZeroParallel(model, optimizer, game, args)
+    alphaZero.learn()
+
+if __name__ == "__main__":
+    main()

@@ -301,7 +301,7 @@ def botmatch():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     model = ResNet(game, 9, 128, device)
-    model.load_state_dict(torch.load("model_0_ConnectFive_20241209-085238.pt", map_location=device))
+    model.load_state_dict(torch.load("model_1_ConnectFive_20241207-121706.pt", map_location=device))
     model.eval()
 
     mcts = MCTS(game, args, model)
