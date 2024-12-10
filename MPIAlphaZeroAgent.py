@@ -268,9 +268,10 @@ class MCTSParallel:
                 node.backpropagate(spg_value)
 
 class AlphaZeroParallel:
-    def __init__(self, model, optimizer, game, args):
+    def __init__(self, model, optimizer, scheduler, game, args):
         self.model = model
         self.optimizer = optimizer
+        self.scheduler = scheduler
         self.game = game
         self.args = args
         self.mcts = MCTSParallel(game, args, model)
@@ -358,6 +359,7 @@ class AlphaZeroParallel:
             self.optimizer.zero_grad()
             loss.backward()
             self.optimizer.step()
+            self.scheduler.step()
     
     def learn(self):
         for iteration in range(self.args['num_iterations']):
@@ -369,8 +371,8 @@ class AlphaZeroParallel:
                 memory += self.selfPlay()
                 time_used = time.time() - start_time
                 if rank == 0:
-                    print(f"Game {selfPlay_iteration * self.args['num_parallel_games']}/{(selfPlay_iteration+1) * self.args['num_parallel_games']} Allocated memory: {torch.cuda.memory_allocated() / 1024**2:.2f} MB, Time Elapsed: {time_used:.4f}")
-                    send_email(f"Game {selfPlay_iteration * self.args['num_parallel_games']}/{(selfPlay_iteration+1) * self.args['num_parallel_games']} Allocated memory: {torch.cuda.memory_allocated() / 1024**2:.2f} MB, Time Elapsed: {time_used:.4f}")
+                    print(f"Game {selfPlay_iteration * self.args['num_parallel_games']}-{(selfPlay_iteration+1) * self.args['num_parallel_games']} Time Elapsed: {time_used:.4f}")
+                    send_email(f"Game {selfPlay_iteration * self.args['num_parallel_games']}-{(selfPlay_iteration+1) * self.args['num_parallel_games']} Time Elapsed: {time_used:.4f}")
             
             if rank == 0:
                 start_time = time.time()
@@ -382,8 +384,8 @@ class AlphaZeroParallel:
                 timestamp = time.strftime("%Y%m%d-%H%M%S")
                 torch.save(self.model.state_dict(), f"model_{iteration}_{self.game}_{timestamp}.pt")
                 torch.save(self.optimizer.state_dict(), f"optimizer_{iteration}_{self.game}_{timestamp}.pt")
-                print(f"iteration {iteration} done! Time Elapsed in training: {time_used:.4f}")
-                send_email(f"iteration {iteration} done! Time Elapsed in training: {time_used:.4f}")
+                print(f"iteration {iteration} done! Allocated memory: {torch.cuda.memory_allocated() / 1024**2:.2f} MB. Time Elapsed in training: {time_used:.4f}.")
+                send_email(f"iteration {iteration} done! Allocated memory: {torch.cuda.memory_allocated() / 1024**2:.2f} MB. Time Elapsed in training: {time_used:.4f}.")
             else:
                 weights = None
             weights = comm.bcast(weights, root=0)
@@ -418,7 +420,7 @@ def main():
         'dirichlet_alpha': 0.03
     }
 
-    alphaZero = AlphaZeroParallel(model, scheduler, game, args)
+    alphaZero = AlphaZeroParallel(model,optimizer, scheduler, game, args)
     alphaZero.learn()
 
 if __name__ == "__main__":
