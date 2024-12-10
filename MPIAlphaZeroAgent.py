@@ -403,7 +403,7 @@ def main():
 
     model = ResNet(game, 9, 128, device) 
     optimizer = torch.optim.Adam(model.parameters(), lr=0.2, weight_decay=0.0001)
-    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=20, gamma=0.1)
+    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=25, gamma=0.1)
 
     model_checkpoint_path = "model_0_ConnectFive_20241209-085238.pt"
     optimizer_checkpoint_path = "optimizer_0_ConnectFive_20241209-085238.pt"
@@ -415,9 +415,9 @@ def main():
         'C': 2,
         'num_searches': 800,
         'num_iterations': 20,
-        'num_selfPlay_iterations': 500,
-        'num_parallel_games': 125,
-        'num_epochs': 4,
+        'num_selfPlay_iterations': 900,
+        'num_parallel_games': 300,
+        'num_epochs': 5,
         'batch_size': 128,
         'temperature': 1.25,
         'dirichlet_epsilon': 0.25,
