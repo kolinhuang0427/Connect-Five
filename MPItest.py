@@ -404,12 +404,6 @@ def main():
     model = ResNet(game, 9, 128, device) 
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001, weight_decay=0.0001)
 
-    model_checkpoint_path = "model_1_<__main__.ConnectFive object at 0x705822c4e8a0>.pt"
-    optimizer_checkpoint_path = "optimizer_1_<__main__.ConnectFive object at 0x705822c4e8a0>.pt"
-
-    model.load_state_dict(torch.load(model_checkpoint_path, weights_only=True))
-    optimizer.load_state_dict(torch.load(optimizer_checkpoint_path, weights_only=True))
-
     args = {
         'C': 2,
         'num_searches': 4,
