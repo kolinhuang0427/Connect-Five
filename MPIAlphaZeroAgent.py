@@ -405,12 +405,6 @@ def main():
     optimizer = torch.optim.Adam(model.parameters(), lr=0.2, weight_decay=0.0001)
     scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=25, gamma=0.1)
 
-    model_checkpoint_path = "model_0_ConnectFive_20241209-085238.pt"
-    optimizer_checkpoint_path = "optimizer_0_ConnectFive_20241209-085238.pt"
-
-    model.load_state_dict(torch.load(model_checkpoint_path, weights_only=True))
-    optimizer.load_state_dict(torch.load(optimizer_checkpoint_path, weights_only=True))
-
     args = {
         'C': 2,
         'num_searches': 800,
