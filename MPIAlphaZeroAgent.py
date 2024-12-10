@@ -384,6 +384,7 @@ class AlphaZeroParallel:
                 timestamp = time.strftime("%Y%m%d-%H%M%S")
                 torch.save(self.model.state_dict(), f"model_{iteration}_{self.game}_{timestamp}.pt")
                 torch.save(self.optimizer.state_dict(), f"optimizer_{iteration}_{self.game}_{timestamp}.pt")
+                torch.save(self.scheduler.state_dict(), f"scheduler_{iteration}_{self.game}_{timestamp}.pt")
                 print(f"iteration {iteration} done! Allocated memory: {torch.cuda.memory_allocated() / 1024**2:.2f} MB. Time Elapsed in training: {time_used:.4f}.")
                 send_email(f"iteration {iteration} done! Allocated memory: {torch.cuda.memory_allocated() / 1024**2:.2f} MB. Time Elapsed in training: {time_used:.4f}.")
             else:
