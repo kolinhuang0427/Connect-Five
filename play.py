@@ -247,87 +247,105 @@ class MCTS:
 
 
 def play():
-    gameState = GameState()
-    ai = MinimaxAgent()
-    '''
-    if len(sys.argv) > 1:
-    # Print command-line arguments
-        print("Command-line arguments:", sys.argv[1:])
-    else:
-        print("No command-line arguments provided.")
-    '''
-    while gameState.isLose() == False and gameState.isWin() == False:
-        user_input = input("What is your move? enter x,y where 0<=x,y<=15:")
-        a = user_input.split(',')
-        try:
-            user_input = int(a[0].strip()), int(a[1].strip())
-            if not (0 <= user_input[0] <= 15 and 0 <= user_input[1] <= 15):
-                raise ValueError
-        except (ValueError, IndexError):
-            print("Invalid input, please enter x,y where 0<=x,y<=15.")
-            continue
-
-        print("your move is ",user_input)
-        while not isinstance(user_input,tuple): 
-            user_input = input("Enter x,y where 0<=x,y<=15:")
-        gameState = gameState.generateSuccessor(-1,user_input)
-        if gameState.isWin() : 
-            print("You won haha")
-            break
-        action = ai.getAction(gameState)
-        print("the ai's move is:", action)
-        gameState = gameState.generateSuccessor(1,action)
-        gameState.data.printGrid()
-        if gameState.isLose() : 
-            print("You lose haha")
-            break
-        
-
-#play()
-
-def botmatch():
     game = ConnectFive()
-    player = -1
-    gameState = GameState()
     minimax = MinimaxAgent()
 
     args = {
         'C': 2,
         'num_searches': 800,
         'dirichlet_epsilon': 0.,
-        'dirichlet_alpha': 0.3
+        'dirichlet_alpha': 0.03
     }
-
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
     model = ResNet(game, 9, 128, device)
-    model.load_state_dict(torch.load("model_1_ConnectFive_20241207-121706.pt", map_location=device))
+    model.load_state_dict(torch.load("model_0_ConnectFive_20241211-154107.pt", map_location=device, weights_only=True))
     model.eval()
-
     mcts = MCTS(game, args, model)
+    gameState = game.get_initial_state()
 
+    player = -1
+    while True:
+        if player == -1:
+            user_input = input("What is your move? enter x,y where 0<=x,y<=15:")
+            a = user_input.split(',')
+            try:
+                user_input = int(a[0].strip()), int(a[1].strip())
+                if not (0 <= user_input[0] <= 15 and 0 <= user_input[1] <= 15):
+                    raise ValueError
+            except (ValueError, IndexError):
+                print("Invalid input, please enter x,y where 0<=x,y<=15.")
+                continue
+
+            print("your move is ",user_input)
+            while not isinstance(user_input,tuple): 
+                user_input = input("Enter x,y where 0<=x,y<=15:")
+            
+            action = user_input[0]*16 + user_input[1]
+            gameState = game.get_next_state(gameState, action, -1)
+            print(gameState)
+            win = game.check_win(gameState, action)
+            if win:
+                print("You Win!")
+                break
+
+        else:
+            action = minimax.getAction(gameState)
+
+            print("minimax action:", action//16, action%16)
+            gameState = game.get_next_state(gameState, action, 1)
+            print(gameState)
+            win = game.check_win(gameState, action)
+            if win:
+                print("minimax")
+                break
+
+        player = game.get_opponent(player)
+#play()
+
+def botmatch():
+    game = ConnectFive()
+    minimax = MinimaxAgent()
+
+    args = {
+        'C': 2,
+        'num_searches': 800,
+        'dirichlet_epsilon': 0.,
+        'dirichlet_alpha': 0.03
+    }
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    model = ResNet(game, 9, 128, device)
+    model.load_state_dict(torch.load("model_0_ConnectFive_20241211-154107.pt", map_location=device, weights_only=True))
+    model.eval()
+    mcts = MCTS(game, args, model)
+    gameState = game.get_initial_state()
+
+    player = -1
     while True:
         
         if player == -1:
-            neutral_state = np.array(gameState.data.data)
-            mcts_probs = mcts.search(neutral_state)
+            mcts_probs = mcts.search(gameState)
             action = np.argmax(mcts_probs)
-            print("alphazero action:", action)
-            row = (action-1) // game.column_count
-            column = (action-1) % game.column_count
-            print("alphazero action:", (column, row))
-            gameState = gameState.generateSuccessor(-1, (column, row))
-            gameState.data.printGrid()
-            if gameState.isWin() : 
+
+            print("alphazero action:", action//16, action%16)
+            gameState = game.get_next_state(gameState, action, -1)
+            print(gameState)
+            win = game.check_win(gameState, action)
+            if win:
                 print("ALPHAZERO")
                 break
+        
         else:
             action = minimax.getAction(gameState)
-            print("minimax action:", action)
-            gameState = gameState.generateSuccessor(1,action)
-            gameState.data.printGrid()
-            if gameState.isLose() : 
-                print("Minimax haha")
+
+            print("minimax action:", action//16, action%16)
+            gameState = game.get_next_state(gameState, action, 1)
+            print(gameState)
+            win = game.check_win(gameState, action)
+            if win:
+                print("minimax")
                 break
+
         player = game.get_opponent(player)
-botmatch()
+
+if __name__ == '__main__':
+    botmatch()

@@ -1,12 +1,90 @@
+import numpy as np
+
+class ConnectFive:
+    def __init__(self):
+        self.size = 16
+        self.row_count = self.size
+        self.column_count = self.size
+        self.win_length = 5
+        self.action_size = self.row_count * self.column_count
+
+    def __str__(self):
+        return "ConnectFive"
+        
+    def get_initial_state(self):
+        return np.zeros((self.row_count, self.column_count))
+    
+    def get_next_state(self, state, action, player):
+        row = action // self.column_count
+        column = action % self.column_count
+        state[row, column] = player
+        return state
+    
+    def get_valid_moves(self, state):
+        return (state.reshape(-1) == 0).astype(np.uint8)
+    
+    def check_win(self, state, action, player=None):
+        row = action // self.column_count
+        column = action % self.column_count
+        player = state[row, column]
+        if player != None: player = player
+        def count_consecutive(row, col, d_row, d_col):
+            count = 0
+            r, c = row, col
+            while 0 <= r < self.row_count and 0 <= c < self.column_count and state[r, c] == player:
+                count += 1
+                r += d_row
+                c += d_col
+            return count
+
+        # Check horizontal, vertical, and two diagonal directions
+        return (
+            count_consecutive(row, column, 0, 1) + count_consecutive(row, column, 0, -1) - 1 >= self.win_length
+            or count_consecutive(row, column, 1, 0) + count_consecutive(row, column, -1, 0) - 1 >= self.win_length
+            or count_consecutive(row, column, 1, 1) + count_consecutive(row, column, -1, -1) - 1 >= self.win_length
+            or count_consecutive(row, column, 1, -1) + count_consecutive(row, column, -1, 1) - 1 >= self.win_length
+        )
+    
+    def get_value_and_terminated(self, state, action):
+        if self.check_win(state, action):
+            return 1, True
+        if np.sum(self.get_valid_moves(state)) == 0:
+            return 0, True
+        return 0, False
+    
+    def get_opponent(self, player):
+        return -player
+    
+    def get_opponent_value(self, value):
+        return -value
+    
+    def get_encoded_state(self, state):
+        encoded_state = np.stack(
+            (state == -1, state == 0, state == 1)
+        ).astype(np.float32)
+        
+        if len(state.shape) == 3:
+            encoded_state = np.swapaxes(encoded_state, 0, 1)
+        
+        return encoded_state
+    
+    def change_perspective(self, state, player):
+        return state * player
+
+
+
+
+
 """AI agentIndex = 1"""
 """Player agentIndex = -1"""
 """isLose records if the player has lost (AI has won)"""
 """An action is a tuple of the place an agent can place a piece"""
+'''
 import copy
 import numpy as np
 class Grid :
 
-    def __init__(self, width=16, height=16, initialValue=0) -> None:
+    def __init__(self, width=size, height=size, initialValue=0) -> None:
         self.left = width//2
         self.right = width//2
         self.top = height//2
@@ -69,7 +147,7 @@ class Grid :
         return self.data[x][y]
 
     def printGrid(self):
-        print("  0 1 2 3 4 5 6 7 8 9 a b c d e f")
+        print("  0 1 2 3 4 5size 7 8 9 a b c d e f")
         for y in range(self.height) :
             temp = hex(y)
             temp = temp[-1]
@@ -165,7 +243,7 @@ class Player:
         if state.data.getValue(x,y) != 0: raise Exception("Illegal action" + str(action))
         state.data.act(x,y,-1)
 
-'''
+
 testGameState = GameState()
 testAI = AI()
 testPlayer = Player()
@@ -175,7 +253,7 @@ testPlayer.applyAction(testGameState,(8,8))
 testPlayer.applyAction(testGameState,(9,9))
 testPlayer.applyAction(testGameState,(10,10))
 testPlayer.applyAction(testGameState,(7,7))
-testGameState1 = testGameState.generateSuccessor(-1,(6,6))
+testGameState1 = testGameState.generateSuccessor(-1,size))
 
 ##print(testGameState.data.data)
 '''
