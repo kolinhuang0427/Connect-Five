@@ -324,15 +324,18 @@ class AlphaZeroParallel:
         
         # Gather results from all processes
         all_return_memory = comm.gather(return_memory, root=0)
-        
+    
         if rank == 0:
             # Combine data from all processes
             all_return_memory = sum(all_return_memory, [])
+            result = all_return_memory  # Only rank 0 returns the combined memory
+        else:
+            result = []  # Other ranks return an empty list
         
-        # Broadcast combined data to all processes
-        all_return_memory = comm.bcast(all_return_memory, root=0)
+        # Synchronize all processes
+        comm.barrier()
         
-        return all_return_memory
+        return result
 
                 
     def train(self, memory):
@@ -412,8 +415,8 @@ def main():
         'C': 2,
         'num_searches': 800,
         'num_iterations': 20,
-        'num_selfPlay_iterations': 900,
-        'num_parallel_games': 300,
+        'num_selfPlay_iterations': 1000,
+        'num_parallel_games': 250,
         'num_epochs': 5,
         'batch_size': 128,
         'temperature': 1.25,
