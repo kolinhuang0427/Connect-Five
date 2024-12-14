@@ -1,12 +1,13 @@
 from connect_five import *
 import numpy as np
 from multiprocessing import Pool
+
 def parallel_worker(args):
-            gameState, action, agent = args
-            child_state = gameState.copy()
-            child_state = agent.game.get_next_state(child_state, action, 1)
-            value = agent.minimizer(child_state, agent.depth - 1, float("-inf"), float("inf"))
-            return value, action
+    gameState, action, agent = args
+    child_state = gameState.copy()
+    child_state = agent.game.get_next_state(child_state, action, 1)
+    value = agent.minimizer(child_state, agent.depth - 1, float("-inf"), float("inf"))
+    return value, action
 
 class MinimaxAgent():
     def __init__(self) :
@@ -19,7 +20,11 @@ class MinimaxAgent():
         self.right = self.size//2 + 1
         self.top = self.size//2 - 1
         self.bottom = self.size//2 + 1
-    def count_consecutive_values(self, gameState, target):
+
+    def __str__(self):
+        return "minimax"
+    
+    def count_consecutive_values(self, gameState):
         height, width = gameState.shape
 
         def check_consecutive(x, y, dx, dy, value):
@@ -27,77 +32,80 @@ class MinimaxAgent():
             while 0 <= x < width and 0 <= y < height:
                 if gameState[x][y] == value:
                     count += 1
-                    if count == target:
-                        return True
                 else:
-                    return False
+                    return count
                 x += dx
                 y += dy
-            return False
+            return count
+    
+        indices = np.where(gameState != 0)
+        indices_list = list(zip(indices[0], indices[1]))
+        
+        countFree = {x: 0 for x in np.arange(1,6,1)}
+        countBounded = {x: 0 for x in np.arange(1,6,1)}
+        for i, j in indices_list:
+            value = gameState[i][j]
+            if value == -1: value1 = -1.1
+            else: value1 = 1
 
-        countFree = countBounded = 0 
-        for i in range(width):
-            for j in range(height):
-                if gameState[i][j] != 0:
-                    value = gameState[i][j]
-                    if value == -1: value1 = -1.1
-                    else: value1 = 1
-                    # Check vertically
-                    if j <= height - target:
-                        if check_consecutive(i, j, 0, 1,value):
-                            if j > 0 and j + target < height: # not at borders
-                                if gameState[i][j-1] == 0 and gameState[i][j+target] == 0: countFree += value1
-                                elif gameState[i][j-1] == 0 or gameState[i][j+target] == 0: countBounded += value1
-                            else: 
-                                if j == 0: 
-                                    if gameState[i][j+target] == 0: countBounded += value1
-                                else:
-                                    if gameState[i][j-1] == 0: countBounded += value1
-                    # Check horizontally
-                    if i <= width - target:
-                        if check_consecutive(i, j, 1, 0,value):
-                            if i > 0 and i + target < width:
-                                if gameState[i-1][j] == 0 and gameState[i+target][j] == 0: countFree += value1
-                                elif gameState[i-1][j] == 0 or gameState[i+target][j] == 0: countBounded += value1
-                            else: 
-                                if i == 0: 
-                                    if gameState[i+target][j] == 0: countBounded+= value1
-                                else:
-                                    if gameState[i-1][j] == 0: countBounded+= value1
-                    # Check diagonally (top-left to bottom-right)
-                    if i <= width - target and j <= height - target:
-                        if check_consecutive(i, j, 1, 1,value):
-                            if i > 0 and j > 0 and i + target < width and j + target < height:
-                                if gameState[i-1][j-1] == 0 and gameState[i+target][j+target] == 0: countFree += value1
-                                elif gameState[i-1][j-1] == 0 or gameState[i+target][j+target] == 0: countBounded += value1
-                            elif i + target < width - 1 and j + target < height - 1: 
-                                if gameState[i+target][j+target] == 0: countBounded += value1
-                            elif i > 0 and j > 0:
-                                if gameState[i-1][j-1] == 0: countBounded += value1
-                    # Check diagonally (top-right to bottom-left)
-                    if i - target >= 0 and j <= height - target:
-                        if check_consecutive(i, j, -1, 1,value):
-                            if i + 1 < width and j > 0 and i - target > 0 and j + target < height:
-                                if gameState[i+1][j-1] == 0 and gameState[i-target][j+target] == 0: countFree += value1
-                                elif gameState[i+1][j-1] == 0 or gameState[i-target][j+target] == 0: countBounded += value1
-                            elif i + 1 < width and j > 0: 
-                                if gameState[i+1][j-1] == 0: countBounded += value1
-                            elif i - target > 0 and j + target < height:
-                                if gameState[i-target][j+target] == 0: countBounded += value1
+            # Check vertically
+            count = check_consecutive(i, j, 0, 1,value)
+            if j > 0 and j + count < height: # not at borders
+                if gameState[i][j-1] == 0 and gameState[i][j+count] == 0: countFree[count] += value1
+                elif gameState[i][j-1] == 0 or gameState[i][j+count] == 0: countBounded[count] += value1
+            else: 
+                if j == 0: 
+                    if gameState[i][j+count] == 0: countBounded[count]+= value1
+                else:
+                    if gameState[i][j-1] == 0: countBounded[count] += value1
+
+            # Check horizontally
+            count = check_consecutive(i, j, 1, 0,value)
+            if i > 0 and i + count < width:
+                if gameState[i-1][j] == 0 and gameState[i+count][j] == 0: countFree[count] += value1
+                elif gameState[i-1][j] == 0 or gameState[i+count][j] == 0: countBounded[count] += value1
+            else: 
+                if i == 0: 
+                    if gameState[i+count][j] == 0: countBounded[count] += value1
+                else:
+                    if gameState[i-1][j] == 0: countBounded[count] += value1
+
+            # Check diagonally (top-left to bottom-right)
+            count = check_consecutive(i, j, 1, 1,value)
+            if i > 0 and j > 0 and i + count < width and j + count < height:
+                if gameState[i-1][j-1] == 0 and gameState[i+count][j+count] == 0: countFree[count] += value1
+                elif gameState[i-1][j-1] == 0 or gameState[i+count][j+count] == 0: countBounded[count] += value1
+            elif i + count < width - 1 and j + count < height - 1: 
+                if gameState[i+count][j+count] == 0: countBounded[count] += value1
+            elif i > 0 and j > 0:
+                if gameState[i-1][j-1] == 0: countBounded[count] += value1
+
+            # Check diagonally (top-right to bottom-left)
+            count = check_consecutive(i, j, -1, 1,value)
+            if i + 1 < width and j > 0 and i - count > 0 and j + count < height:
+                if gameState[i+1][j-1] == 0 and gameState[i-count][j+count] == 0: countFree[count] += value1
+                elif gameState[i+1][j-1] == 0 or gameState[i-count][j+count] == 0: countBounded[count] += value1
+            elif i + 1 < width and j > 0: 
+                if gameState[i+1][j-1] == 0: countBounded[count] += value1
+            elif i - count > 0 and j + count < height:
+                if gameState[i-count][j+count] == 0: countBounded[count] += value1
         return countFree, countBounded
     
-    def evaluationFunction1(self, gameState):
+    def evaluationFunction(self, gameState):
         res = 0
-        for target_length in [5, 4, 3, 2]:
-            free, bounded = self.count_consecutive_values(gameState, target_length)
-            if target_length == 4 and free != 0:  
-                res += free * 1e308 # Very high penalty for allowing four in a row
-            else:
-                res += free*((target_length-1)**2) * 10**target_length + bounded*(target_length-1) * 10**(target_length-2)
+        free, bounded = self.count_consecutive_values(gameState)
 
-            if target_length == 5 and (free != 0 or bounded != 0):  
-                res += free * float("inf")
-                return res
+        for key in free.keys():
+            if key != 1:
+                res += free[key] * 16**key
+        for key in bounded.keys():
+            if key != 1:
+                res += bounded[key] * 16**key
+        
+        if free[5] != 0 or bounded[5] != 0:  
+            res += free[5] * float("inf")
+            res += bounded[5] * float("inf")
+
         return res
     
     def minimizer (self, gameState, depth, a, b) :
@@ -107,14 +115,15 @@ class MinimaxAgent():
         values = []
         actions = self.game.get_valid_moves(gameState)
         indices = np.where(actions == 1)[0]
-        if len(indices) == 0: return self.evaluationFunction1(gameState)
-        indices = indices[(indices//self.size >= self.left) & (indices//self.size < self.right) & (indices%self.size >= self.top) & (indices%self.size < self.bottom)]
+        if len(indices) == 0: return self.evaluationFunction(gameState)
+        indices = indices[(indices//self.size >= self.left) & (indices//self.size < self.right) 
+                          & (indices%self.size >= self.top) & (indices%self.size < self.bottom)]
 
         actionsAndValues = []
         for action in indices:
             child_state = gameState.copy()
             child_state = self.game.get_next_state(child_state, action, -1)
-            stateValue = self.evaluationFunction1(child_state)
+            stateValue = self.evaluationFunction(child_state)
             actionsAndValues.append((stateValue, child_state))
         
         sortedPairs = sorted(actionsAndValues, key=lambda tup: tup[0])
@@ -135,19 +144,20 @@ class MinimaxAgent():
     def maximizer (self, gameState, depth, a, b) :
         v = float("-inf")
         if self.game.check_win(gameState, 1, -1): float("-inf"), None
-        if depth == 0 : return self.evaluationFunction1(gameState), None
+        if depth == 0 : return self.evaluationFunction(gameState), None
         
         best = float("-inf")
         actions = self.game.get_valid_moves(gameState)
         indices = np.where(actions == 1)[0]
-        if len(indices) == 0: return self.evaluationFunction1(gameState), None
-        indices = indices[(indices//self.size >= self.left) & (indices//self.size < self.right) & (indices%self.size >= self.top) & (indices%self.size < self.bottom)]
+        if len(indices) == 0: return self.evaluationFunction(gameState), None
+        indices = indices[(indices//self.size >= self.left) & (indices//self.size < self.right) 
+                          & (indices%self.size >= self.top) & (indices%self.size < self.bottom)]
         
         actionsAndValues = []
         for action in indices:
             child_state = gameState.copy()
             child_state = self.game.get_next_state(child_state, action, 1)
-            stateValue = self.evaluationFunction1(child_state)
+            stateValue = self.evaluationFunction(child_state)
             if stateValue >= b:
                 return stateValue, action  # prune
             actionsAndValues.append((stateValue, child_state, action))

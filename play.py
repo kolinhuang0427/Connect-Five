@@ -4,77 +4,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import math
-
-class ConnectFive:
-    def __init__(self):
-        self.row_count = 16
-        self.column_count = 16
-        self.win_length = 5
-        self.action_size = self.row_count * self.column_count
-
-    def __str__(self):
-        return "ConnectFive"
-        
-    def get_initial_state(self):
-        return np.zeros((self.row_count, self.column_count))
-    
-    def get_next_state(self, state, action, player):
-        row = action // self.column_count
-        column = action % self.column_count
-        state[row, column] = player
-        return state
-    
-    def get_valid_moves(self, state):
-        return (state.reshape(-1) == 0).astype(np.uint8)
-    
-    def check_win(self, state, action):
-        row = action // self.column_count
-        column = action % self.column_count
-        player = state[row, column]
-        
-        def count_consecutive(row, col, d_row, d_col):
-            count = 0
-            r, c = row, col
-            while 0 <= r < self.row_count and 0 <= c < self.column_count and state[r, c] == player:
-                count += 1
-                r += d_row
-                c += d_col
-            return count
-
-        # Check horizontal, vertical, and two diagonal directions
-        return (
-            count_consecutive(row, column, 0, 1) + count_consecutive(row, column, 0, -1) - 1 >= self.win_length
-            or count_consecutive(row, column, 1, 0) + count_consecutive(row, column, -1, 0) - 1 >= self.win_length
-            or count_consecutive(row, column, 1, 1) + count_consecutive(row, column, -1, -1) - 1 >= self.win_length
-            or count_consecutive(row, column, 1, -1) + count_consecutive(row, column, -1, 1) - 1 >= self.win_length
-        )
-    
-    def get_value_and_terminated(self, state, action):
-        if self.check_win(state, action):
-            return 1, True
-        if np.sum(self.get_valid_moves(state)) == 0:
-            return 0, True
-        return 0, False
-    
-    def get_opponent(self, player):
-        return -player
-    
-    def get_opponent_value(self, value):
-        return -value
-    
-    def get_encoded_state(self, state):
-        encoded_state = np.stack(
-            (state == -1, state == 0, state == 1)
-        ).astype(np.float32)
-        
-        if len(state.shape) == 3:
-            encoded_state = np.swapaxes(encoded_state, 0, 1)
-        
-        return encoded_state
-    
-    def change_perspective(self, state, player):
-        return state * player
-
+#from MPIAlphaZeroAgent import ResNet, Node
 class ResNet(nn.Module):
     def __init__(self, game, num_resBlocks, num_hidden, device):
         super().__init__()
@@ -190,7 +120,6 @@ class Node:
         if self.parent is not None:
             self.parent.backpropagate(value)  
 
-
 class MCTS:
     def __init__(self, game, args, model):
         self.game = game
@@ -245,27 +174,15 @@ class MCTS:
         return action_probs
         
 
+class human:
+    def __init__(self):
+        pass
 
-def play():
-    game = ConnectFive()
-    minimax = MinimaxAgent()
+    def __str__(self):
+        return "human"
 
-    args = {
-        'C': 2,
-        'num_searches': 800,
-        'dirichlet_epsilon': 0.,
-        'dirichlet_alpha': 0.03
-    }
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model = ResNet(game, 9, 128, device)
-    model.load_state_dict(torch.load("model_0_ConnectFive_20241211-154107.pt", map_location=device, weights_only=True))
-    model.eval()
-    mcts = MCTS(game, args, model)
-    gameState = game.get_initial_state()
-
-    player = -1
-    while True:
-        if player == -1:
+    def getAction(self, gameState):
+        while True:
             user_input = input("What is your move? enter x,y where 0<=x,y<=15:")
             a = user_input.split(',')
             try:
@@ -281,71 +198,66 @@ def play():
                 user_input = input("Enter x,y where 0<=x,y<=15:")
             
             action = user_input[0]*16 + user_input[1]
-            gameState = game.get_next_state(gameState, action, -1)
-            print(gameState)
-            win = game.check_win(gameState, action)
-            if win:
-                print("You Win!")
-                break
+            return action
 
-        else:
-            action = minimax.getAction(gameState)
+class alphaZeroPlayer:
+    def __init__(self, model_path):
+        game = ConnectFive()
+        args = {
+            'C': 2,
+            'num_searches': 800,
+            'dirichlet_epsilon': 0.,
+            'dirichlet_alpha': 0.03
+        }
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        model = ResNet(game, 9, 128, device)
+        model.load_state_dict(torch.load(model_path, map_location=device, weights_only=True))
+        model.eval()
+        self.mcts = MCTS(game, args, model)
 
-            print("minimax action:", action//16, action%16)
-            gameState = game.get_next_state(gameState, action, 1)
-            print(gameState)
-            win = game.check_win(gameState, action)
-            if win:
-                print("minimax")
-                break
+    def __str__(self):
+        return "alphazero"
 
-        player = game.get_opponent(player)
-#play()
+    def getAction(self, gameState):
+        mcts_probs = self.mcts.search(gameState)
+        action = np.argmax(mcts_probs)
+        return action
 
-def botmatch():
+def play():
     game = ConnectFive()
-    minimax = MinimaxAgent()
-
-    args = {
-        'C': 2,
-        'num_searches': 800,
-        'dirichlet_epsilon': 0.,
-        'dirichlet_alpha': 0.03
-    }
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model = ResNet(game, 9, 128, device)
-    model.load_state_dict(torch.load("model_0_ConnectFive_20241211-154107.pt", map_location=device, weights_only=True))
-    model.eval()
-    mcts = MCTS(game, args, model)
     gameState = game.get_initial_state()
 
-    player = -1
+    #player1 = human()
+    player1 = alphaZeroPlayer("model_3_ConnectFive_20241213-121053.pt")
+    #player2 = alphaZeroPlayer("")
+    player2 = MinimaxAgent()
+
+    player_index = -1
     while True:
         
-        if player == -1:
-            mcts_probs = mcts.search(gameState)
-            action = np.argmax(mcts_probs)
+        if player_index == -1:
+            action = player1.getAction(gameState)
 
-            print("alphazero action:", action//16, action%16)
+            print("Player1 action:", action//16, action%16)
             gameState = game.get_next_state(gameState, action, -1)
             print(gameState)
             win = game.check_win(gameState, action)
             if win:
-                print("ALPHAZERO")
+                print(f"Player1 {player1} Wins!")
                 break
         
         else:
-            action = minimax.getAction(gameState)
+            action = player2.getAction(gameState)
 
-            print("minimax action:", action//16, action%16)
+            print("Player2 action:", action//16, action%16)
             gameState = game.get_next_state(gameState, action, 1)
             print(gameState)
             win = game.check_win(gameState, action)
             if win:
-                print("minimax")
+                print(f"Player2 {player2} Wins!")
                 break
 
-        player = game.get_opponent(player)
+        player_index = game.get_opponent(player_index)
 
 if __name__ == '__main__':
-    botmatch()
+    play()
