@@ -14,10 +14,20 @@ from send_email import send_email
 import random
 import math
 from mpi4py import MPI
+
+import logging
+
 comm = MPI.COMM_WORLD
 rank = comm.Get_rank()  # Process rank (0 or 1 in our case)
 size = comm.Get_size()  # Total number of processes
-
+logging.basicConfig(
+    level=logging.DEBUG,  # Set log level to DEBUG for detailed logging
+    format='%(asctime)s - %(levelname)s - %(message)s',  # Log format including timestamp and log level
+    handlers=[
+        logging.StreamHandler(),  # Output logs to console
+        logging.FileHandler("mpi_log.txt", mode="w")  # Optionally, log to a file
+    ]
+)
 class TicTacToe:
     def __init__(self):
         self.row_count = 3
@@ -307,11 +317,14 @@ class AlphaZeroParallel:
                             hist_action_probs,
                             hist_outcome
                         ))
+                    logging.info("Self-play completed at rank %d. Game: %d", rank, i)
+
                     del spGames[i]
                     
             player = self.game.get_opponent(player)
         
         # Gather results from all processes
+        comm.barrier()
         all_return_memory = comm.gather(return_memory, root=0)
     
         if rank == 0:
@@ -321,9 +334,8 @@ class AlphaZeroParallel:
         else:
             result = []  # Other ranks return an empty list
         
-        # Synchronize all processes
         comm.barrier()
-        
+        logging.info("Self-play completed at rank %d. Games played: %d", rank, local_num_games)
         return result
 
                 
