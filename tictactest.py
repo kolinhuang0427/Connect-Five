@@ -506,8 +506,6 @@ args = {
 alphaZero = AlphaZeroParallel(model, optimizer, game, args)
 alphaZero.learn()
 
-import matplotlib.pyplot as plt
-
 tictactoe = TicTacToe()
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -536,5 +534,4 @@ print(value)
 print(state)
 print(tensor_state)
 
-plt.bar(range(tictactoe.action_size), policy)
-plt.show()
+print(policy)
