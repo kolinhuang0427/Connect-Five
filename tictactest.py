@@ -457,7 +457,7 @@ class AlphaZeroParallel:
             self.model.eval()
             for selfPlay_iteration in trange(self.args['num_selfPlay_iterations'] // self.args['num_parallel_games']):
                 memory += self.selfPlay()
-            print(np.array(memory).shape)
+
             if rank == 0:
                 self.model.train()
                 for epoch in range(self.args['num_epochs']):
