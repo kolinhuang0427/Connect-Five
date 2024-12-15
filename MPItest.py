@@ -38,6 +38,9 @@ class TicTacToe:
     def get_initial_state(self):
         return np.zeros((self.row_count, self.column_count))
     
+    def __str__(self):
+        return "TicTacToe"
+    
     def get_next_state(self, state, action, player):
         row = action // self.column_count
         column = action % self.column_count
@@ -337,7 +340,7 @@ class AlphaZeroParallel:
             result = []  # Other ranks return an empty list
         
         comm.barrier()
-        logging.info("Self-play completed at rank %d. Games played: %d", rank, local_num_games)
+        logging.info("Self-play completed at rank %d. Games played: %d. Res length: %d", rank, local_num_games, len(result))
         return result
 
                 
@@ -361,7 +364,8 @@ class AlphaZeroParallel:
             policy_loss = F.cross_entropy(out_policy, policy_targets)
             value_loss = F.mse_loss(out_value, value_targets)
             loss = policy_loss + value_loss
-            
+            logging.info(f"Training completed at rank {rank}. Policy Loss: {policy_loss}. Value loss: {value_loss}. Total Loss: {loss}")
+
             self.optimizer.zero_grad()
             loss.backward()
             self.optimizer.step()
@@ -395,6 +399,7 @@ class AlphaZeroParallel:
                 send_email(f"iteration {iteration} done! Allocated memory: {torch.cuda.memory_allocated() / 1024**2:.2f} MB. Time Elapsed in training: {time_used:.4f}.")
             else:
                 weights = None
+            
             weights = comm.bcast(weights, root=0)
             self.model.load_state_dict(weights)
 
