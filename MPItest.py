@@ -25,7 +25,7 @@ logging.basicConfig(
     format='%(asctime)s - %(levelname)s - %(message)s',  # Log format including timestamp and log level
     handlers=[
         logging.StreamHandler(),  # Output logs to console
-        #logging.FileHandler("mpi_log.txt", mode="w")  # Optionally, log to a file
+        logging.FileHandler(f"mpi_log_{rank}.txt", mode="w")  # Optionally, log to a file
     ]
 )
 class TicTacToe:
@@ -324,6 +324,7 @@ class AlphaZeroParallel:
             player = self.game.get_opponent(player)
         
         # Gather results from all processes
+        logging.info("Rank %d reached barrier 1", rank)
         comm.barrier()
         all_return_memory = comm.gather(return_memory, root=0)
     
