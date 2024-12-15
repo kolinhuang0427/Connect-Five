@@ -328,7 +328,7 @@ class AlphaZeroParallel:
             player = self.game.get_opponent(player)
         
         # Gather results from all processes
-        logging.info(f"Rank {rank} reached barrier 1, return memory length {return_memory}")
+        logging.info(f"Rank {rank} reached barrier 1, return memory length {len(return_memory)}")
         comm.barrier()
         all_return_memory = comm.gather(return_memory, root=0)
     
