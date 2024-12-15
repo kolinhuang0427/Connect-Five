@@ -28,7 +28,67 @@ size = comm.Get_size()  # Total number of processes
 
 # In[25]:
 
-
+class TicTacToe:
+    def __init__(self):
+        self.row_count = 3
+        self.column_count = 3
+        self.action_size = self.row_count * self.column_count
+        
+    def __repr__(self):
+        return "TicTacToe"
+        
+    def get_initial_state(self):
+        return np.zeros((self.row_count, self.column_count))
+    
+    def get_next_state(self, state, action, player):
+        row = action // self.column_count
+        column = action % self.column_count
+        state[row, column] = player
+        return state
+    
+    def get_valid_moves(self, state):
+        return (state.reshape(-1) == 0).astype(np.uint8)
+    
+    def check_win(self, state, action):
+        if action == None:
+            return False
+        
+        row = action // self.column_count
+        column = action % self.column_count
+        player = state[row, column]
+        
+        return (
+            np.sum(state[row, :]) == player * self.column_count
+            or np.sum(state[:, column]) == player * self.row_count
+            or np.sum(np.diag(state)) == player * self.row_count
+            or np.sum(np.diag(np.flip(state, axis=0))) == player * self.row_count
+        )
+    
+    def get_value_and_terminated(self, state, action):
+        if self.check_win(state, action):
+            return 1, True
+        if np.sum(self.get_valid_moves(state)) == 0:
+            return 0, True
+        return 0, False
+    
+    def get_opponent(self, player):
+        return -player
+    
+    def get_opponent_value(self, value):
+        return -value
+    
+    def change_perspective(self, state, player):
+        return state * player
+    
+    def get_encoded_state(self, state):
+        encoded_state = np.stack(
+            (state == -1, state == 0, state == 1)
+        ).astype(np.float32)
+        
+        if len(state.shape) == 3:
+            encoded_state = np.swapaxes(encoded_state, 0, 1)
+        
+        return encoded_state
 class ConnectFour:
     def __init__(self):
         self.row_count = 6
@@ -397,7 +457,7 @@ class AlphaZeroParallel:
             self.model.eval()
             for selfPlay_iteration in trange(self.args['num_selfPlay_iterations'] // self.args['num_parallel_games']):
                 memory += self.selfPlay()
-
+            print(np.array(memory).shape)
             if rank == 0:
                 self.model.train()
                 for epoch in range(self.args['num_epochs']):
@@ -426,16 +486,16 @@ game = ConnectFour()
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-model = ResNet(game, 9, 128, device)
+model = ResNet(game, 4, 64, device)
 
 optimizer = torch.optim.Adam(model.parameters(), lr=0.001, weight_decay=0.0001)
 
 args = {
     'C': 2,
-    'num_searches': 600,
-    'num_iterations': 8,
+    'num_searches': 60,
+    'num_iterations': 3,
     'num_selfPlay_iterations': 500,
-    'num_parallel_games': 250,
+    'num_parallel_games': 200,
     'num_epochs': 4,
     'batch_size': 128,
     'temperature': 1.25,
@@ -446,3 +506,35 @@ args = {
 alphaZero = AlphaZeroParallel(model, optimizer, game, args)
 alphaZero.learn()
 
+import matplotlib.pyplot as plt
+
+tictactoe = TicTacToe()
+
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+state = tictactoe.get_initial_state()
+state = tictactoe.get_next_state(state, 2, -1)
+state = tictactoe.get_next_state(state, 4, -1)
+state = tictactoe.get_next_state(state, 6, 1)
+state = tictactoe.get_next_state(state, 8, 1)
+
+
+encoded_state = tictactoe.get_encoded_state(state)
+
+tensor_state = torch.tensor(encoded_state, device=device).unsqueeze(0)
+
+model = ResNet(tictactoe, 4, 64, device=device)
+model.load_state_dict(torch.load('model_2_TicTacToe.pt', map_location=device))
+model.eval()
+
+policy, value = model(tensor_state)
+value = value.item()
+policy = torch.softmax(policy, axis=1).squeeze(0).detach().cpu().numpy()
+
+print(value)
+
+print(state)
+print(tensor_state)
+
+plt.bar(range(tictactoe.action_size), policy)
+plt.show()
