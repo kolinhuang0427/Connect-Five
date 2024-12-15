@@ -25,7 +25,7 @@ logging.basicConfig(
     format='%(asctime)s - %(levelname)s - %(message)s',  # Log format including timestamp and log level
     handlers=[
         logging.StreamHandler(),  # Output logs to console
-        logging.FileHandler("mpi_log.txt", mode="w")  # Optionally, log to a file
+        #logging.FileHandler("mpi_log.txt", mode="w")  # Optionally, log to a file
     ]
 )
 class TicTacToe:
