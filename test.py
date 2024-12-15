@@ -405,7 +405,7 @@ class AlphaZeroParallel:
                 weights = self.model.state_dict()
                 torch.save(self.model.state_dict(), f"model_{iteration}_{self.game}.pt")
                 torch.save(self.optimizer.state_dict(), f"optimizer_{iteration}_{self.game}.pt")
-                print(f"iteration {iteration} done! Allocated memory: {torch.cuda.memory_allocated() / 1024**2:.2f} MB. Time Elapsed in training: {time_used:.4f}.")
+                print(f"iteration {iteration} done! Allocated memory: {torch.cuda.memory_allocated() / 1024**2:.2f} MB.")
             else:
                 weights = None
             weights = comm.bcast(weights, root=0)
