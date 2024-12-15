@@ -153,7 +153,8 @@ class MCTS:
             
             if not is_terminal:
                 policy, value = self.model(
-                    torch.tensor(self.game.get_encoded_state(node.state), device=self.model.device).unsqueeze(0)
+                    torch.tensor(self.game.get_encoded_state(node.state), 
+                                 device=self.model.device).unsqueeze(0)
                 )
                 policy = torch.softmax(policy, axis=1).squeeze(0).cpu().numpy()
                 valid_moves = self.game.get_valid_moves(node.state)
@@ -223,12 +224,18 @@ class alphaZeroPlayer:
         action = np.argmax(mcts_probs)
         return action
 
+def print_game(gameState):
+    gameState = np.vstack([np.arange(16), gameState])
+    gameState = np.hstack([np.append(0, np.arange(16)).reshape(17,1), gameState])
+    print(gameState.astype(int))
+    return 
+
 def play():
     game = ConnectFive()
     gameState = game.get_initial_state()
 
-    #player1 = human()
-    player1 = alphaZeroPlayer("model_3_ConnectFive_20241213-121053.pt")
+    player1 = human()
+    player1 = alphaZeroPlayer("model_5_ConnectFive_20241214-182158.pt")
     #player2 = alphaZeroPlayer("")
     player2 = MinimaxAgent()
 
@@ -240,7 +247,7 @@ def play():
 
             print("Player1 action:", action//16, action%16)
             gameState = game.get_next_state(gameState, action, -1)
-            print(gameState)
+            print_game(gameState)
             win = game.check_win(gameState, action)
             if win:
                 print(f"Player1 {player1} Wins!")
@@ -251,7 +258,7 @@ def play():
 
             print("Player2 action:", action//16, action%16)
             gameState = game.get_next_state(gameState, action, 1)
-            print(gameState)
+            print_game(gameState)
             win = game.check_win(gameState, action)
             if win:
                 print(f"Player2 {player2} Wins!")

@@ -62,7 +62,7 @@ class MinimaxAgent():
             # Check horizontally
             count = check_consecutive(i, j, 1, 0,value)
             if i > 0 and i + count < width:
-                if gameState[i-1][j] == 0 and gameState[i+count][j] == 0: countFree[count] += value1
+                if gameState[i-1][j] == gameState[i+count][j] == 0: countFree[count] += value1
                 elif gameState[i-1][j] == 0 or gameState[i+count][j] == 0: countBounded[count] += value1
             else: 
                 if i == 0: 
@@ -73,7 +73,7 @@ class MinimaxAgent():
             # Check diagonally (top-left to bottom-right)
             count = check_consecutive(i, j, 1, 1,value)
             if i > 0 and j > 0 and i + count < width and j + count < height:
-                if gameState[i-1][j-1] == 0 and gameState[i+count][j+count] == 0: countFree[count] += value1
+                if gameState[i-1][j-1] == gameState[i+count][j+count] == 0: countFree[count] += value1
                 elif gameState[i-1][j-1] == 0 or gameState[i+count][j+count] == 0: countBounded[count] += value1
             elif i + count < width - 1 and j + count < height - 1: 
                 if gameState[i+count][j+count] == 0: countBounded[count] += value1
@@ -83,7 +83,7 @@ class MinimaxAgent():
             # Check diagonally (top-right to bottom-left)
             count = check_consecutive(i, j, -1, 1,value)
             if i + 1 < width and j > 0 and i - count > 0 and j + count < height:
-                if gameState[i+1][j-1] == 0 and gameState[i-count][j+count] == 0: countFree[count] += value1
+                if gameState[i+1][j-1] == gameState[i-count][j+count] == 0: countFree[count] += value1
                 elif gameState[i+1][j-1] == 0 or gameState[i-count][j+count] == 0: countBounded[count] += value1
             elif i + 1 < width and j > 0: 
                 if gameState[i+1][j-1] == 0: countBounded[count] += value1

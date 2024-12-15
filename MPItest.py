@@ -18,15 +18,11 @@ comm = MPI.COMM_WORLD
 rank = comm.Get_rank()  # Process rank (0 or 1 in our case)
 size = comm.Get_size()  # Total number of processes
 
-class ConnectFive:
+class TicTacToe:
     def __init__(self):
-        self.row_count = 16
-        self.column_count = 16
-        self.win_length = 5
+        self.row_count = 3
+        self.column_count = 3
         self.action_size = self.row_count * self.column_count
-
-    def __str__(self):
-        return "ConnectFive"
         
     def get_initial_state(self):
         return np.zeros((self.row_count, self.column_count))
@@ -41,25 +37,18 @@ class ConnectFive:
         return (state.reshape(-1) == 0).astype(np.uint8)
     
     def check_win(self, state, action):
+        if action == None:
+            return False
+        
         row = action // self.column_count
         column = action % self.column_count
         player = state[row, column]
         
-        def count_consecutive(row, col, d_row, d_col):
-            count = 0
-            r, c = row, col
-            while 0 <= r < self.row_count and 0 <= c < self.column_count and state[r, c] == player:
-                count += 1
-                r += d_row
-                c += d_col
-            return count
-
-        # Check horizontal, vertical, and two diagonal directions
         return (
-            count_consecutive(row, column, 0, 1) + count_consecutive(row, column, 0, -1) - 1 >= self.win_length
-            or count_consecutive(row, column, 1, 0) + count_consecutive(row, column, -1, 0) - 1 >= self.win_length
-            or count_consecutive(row, column, 1, 1) + count_consecutive(row, column, -1, -1) - 1 >= self.win_length
-            or count_consecutive(row, column, 1, -1) + count_consecutive(row, column, -1, 1) - 1 >= self.win_length
+            np.sum(state[row, :]) == player * self.column_count
+            or np.sum(state[:, column]) == player * self.row_count
+            or np.sum(np.diag(state)) == player * self.row_count
+            or np.sum(np.diag(np.flip(state, axis=0))) == player * self.row_count
         )
     
     def get_value_and_terminated(self, state, action):
@@ -75,18 +64,15 @@ class ConnectFive:
     def get_opponent_value(self, value):
         return -value
     
+    def change_perspective(self, state, player):
+        return state * player
+    
     def get_encoded_state(self, state):
         encoded_state = np.stack(
             (state == -1, state == 0, state == 1)
         ).astype(np.float32)
         
-        if len(state.shape) == 3:
-            encoded_state = np.swapaxes(encoded_state, 0, 1)
-        
         return encoded_state
-    
-    def change_perspective(self, state, player):
-        return state * player
 
 class ResNet(nn.Module):
     def __init__(self, game, num_resBlocks, num_hidden, device):
@@ -268,9 +254,10 @@ class MCTSParallel:
                 node.backpropagate(spg_value)
 
 class AlphaZeroParallel:
-    def __init__(self, model, optimizer, game, args):
+    def __init__(self, model, optimizer, scheduler, game, args):
         self.model = model
         self.optimizer = optimizer
+        self.scheduler = scheduler
         self.game = game
         self.args = args
         self.mcts = MCTSParallel(game, args, model)
@@ -323,15 +310,18 @@ class AlphaZeroParallel:
         
         # Gather results from all processes
         all_return_memory = comm.gather(return_memory, root=0)
-        
+    
         if rank == 0:
             # Combine data from all processes
             all_return_memory = sum(all_return_memory, [])
+            result = all_return_memory  # Only rank 0 returns the combined memory
+        else:
+            result = []  # Other ranks return an empty list
         
-        # Broadcast combined data to all processes
-        all_return_memory = comm.bcast(all_return_memory, root=0)
+        # Synchronize all processes
+        comm.barrier()
         
-        return all_return_memory
+        return result
 
                 
     def train(self, memory):
@@ -358,6 +348,7 @@ class AlphaZeroParallel:
             self.optimizer.zero_grad()
             loss.backward()
             self.optimizer.step()
+            self.scheduler.step()
     
     def learn(self):
         for iteration in range(self.args['num_iterations']):
@@ -369,8 +360,8 @@ class AlphaZeroParallel:
                 memory += self.selfPlay()
                 time_used = time.time() - start_time
                 if rank == 0:
-                    print(f"Game {selfPlay_iteration * self.args['num_parallel_games']}/{(selfPlay_iteration+1) * self.args['num_parallel_games']} Allocated memory: {torch.cuda.memory_allocated() / 1024**2:.2f} MB, Time Elapsed: {time_used:.4f}")
-                    send_email(f"Game {selfPlay_iteration * self.args['num_parallel_games']}/{(selfPlay_iteration+1) * self.args['num_parallel_games']} Allocated memory: {torch.cuda.memory_allocated() / 1024**2:.2f} MB, Time Elapsed: {time_used:.4f}")
+                    print(f"Game {selfPlay_iteration * self.args['num_parallel_games']}-{(selfPlay_iteration+1) * self.args['num_parallel_games']} Time Elapsed: {time_used:.4f}")
+                    send_email(f"Game {selfPlay_iteration * self.args['num_parallel_games']}-{(selfPlay_iteration+1) * self.args['num_parallel_games']} Time Elapsed: {time_used:.4f}")
             
             if rank == 0:
                 start_time = time.time()
@@ -382,8 +373,9 @@ class AlphaZeroParallel:
                 timestamp = time.strftime("%Y%m%d-%H%M%S")
                 torch.save(self.model.state_dict(), f"model_{iteration}_{self.game}_{timestamp}.pt")
                 torch.save(self.optimizer.state_dict(), f"optimizer_{iteration}_{self.game}_{timestamp}.pt")
-                print(f"iteration {iteration} done! Time Elapsed in training: {time_used:.4f}")
-                send_email(f"iteration {iteration} done! Time Elapsed in training: {time_used:.4f}")
+                torch.save(self.scheduler.state_dict(), f"scheduler_{iteration}_{self.game}_{timestamp}.pt")
+                print(f"iteration {iteration} done! Allocated memory: {torch.cuda.memory_allocated() / 1024**2:.2f} MB. Time Elapsed in training: {time_used:.4f}.")
+                send_email(f"iteration {iteration} done! Allocated memory: {torch.cuda.memory_allocated() / 1024**2:.2f} MB. Time Elapsed in training: {time_used:.4f}.")
             else:
                 weights = None
             weights = comm.bcast(weights, root=0)
@@ -397,19 +389,20 @@ class SPG:
         self.node = None
 
 def main():
-    game = ConnectFive()
+    game = TicTacToe()
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     model = ResNet(game, 9, 128, device) 
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.001, weight_decay=0.0001)
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.2, weight_decay=0.0001)
+    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=25, gamma=0.1)
 
     args = {
         'C': 2,
-        'num_searches': 4,
-        'num_iterations': 2,
-        'num_selfPlay_iterations': 4,
-        'num_parallel_games': 2,
+        'num_searches': 60,
+        'num_iterations': 3,
+        'num_selfPlay_iterations': 500,
+        'num_parallel_games': 250,
         'num_epochs': 4,
         'batch_size': 128,
         'temperature': 1.25,
@@ -417,7 +410,7 @@ def main():
         'dirichlet_alpha': 0.03
     }
 
-    alphaZero = AlphaZeroParallel(model, optimizer, game, args)
+    alphaZero = AlphaZeroParallel(model,optimizer, scheduler, game, args)
     alphaZero.learn()
 
 if __name__ == "__main__":
