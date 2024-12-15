@@ -20,6 +20,7 @@ import logging
 comm = MPI.COMM_WORLD
 rank = comm.Get_rank()  # Process rank (0 or 1 in our case)
 size = comm.Get_size()  # Total number of processes
+
 logging.basicConfig(
     level=logging.DEBUG,  # Set log level to DEBUG for detailed logging
     format='%(asctime)s - %(levelname)s - %(message)s',  # Log format including timestamp and log level
@@ -426,6 +427,7 @@ def main():
         'dirichlet_alpha': 0.03
     }
 
+    logging.info("Rank %d / %d says hi", rank, size)
     alphaZero = AlphaZeroParallel(model,optimizer, scheduler, game, args)
     alphaZero.learn()
 
