@@ -416,7 +416,7 @@ def main():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     model = ResNet(game, 9, 128, device) 
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.2, weight_decay=0.0001)
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.001, weight_decay=0.0001)
     scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=25, gamma=0.1)
 
     args = {
