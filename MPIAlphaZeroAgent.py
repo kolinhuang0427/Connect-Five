@@ -8,8 +8,6 @@ print("Is CUDA available:", torch.cuda.is_available())
 
 import torch.nn as nn
 import torch.nn.functional as F
-
-torch.manual_seed(0)
 from send_email import send_email
 import random
 import math
@@ -409,6 +407,14 @@ def main():
     model = ResNet(game, 9, 128, device) 
     optimizer = torch.optim.Adam(model.parameters(), lr=0.2, weight_decay=0.0001)
     scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=25, gamma=0.1)
+
+    model_checkpoint_path = "model_5_ConnectFive_20241214-182158.pt"
+    optimizer_checkpoint_path = "optimizer_5_ConnectFive_20241214-182158.pt"
+    scheduler_checkpoint_path = "scheduler_5_ConnectFive_20241214-182158.pt"
+
+    model.load_state_dict(torch.load(model_checkpoint_path, weights_only=True))
+    optimizer.load_state_dict(torch.load(optimizer_checkpoint_path, weights_only=True))
+    scheduler.load_state_dict(torch.load(scheduler_checkpoint_path, weights_only=True))
 
     args = {
         'C': 2,
