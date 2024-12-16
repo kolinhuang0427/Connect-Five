@@ -367,9 +367,11 @@ class AlphaZeroParallel:
         for batchIdx in range(0, len(memory), self.args['batch_size']):
             try:
                 sample = memory[batchIdx:min(len(memory) - 1, batchIdx + self.args['batch_size'])] # Change to memory[batchIdx:batchIdx+self.args['batch_size']] in case of an error
+                state, policy_targets, value_targets = zip(*sample)
             except:
                  sample = memory[batchIdx:batchIdx+self.args['batch_size']]
-            state, policy_targets, value_targets = zip(*sample)
+                 state, policy_targets, value_targets = zip(*sample)
+            
             
             state, policy_targets, value_targets = np.array(state), np.array(policy_targets), np.array(value_targets).reshape(-1, 1)
             
