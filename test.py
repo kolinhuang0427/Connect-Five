@@ -13,9 +13,6 @@ print(torch.__version__)
 
 import torch.nn as nn
 import torch.nn.functional as F
-
-torch.manual_seed(0)
-
 from tqdm.notebook import trange
 from itertools import chain
 import random
@@ -395,7 +392,7 @@ class AlphaZeroParallel:
             memory = []
             
             self.model.eval()
-            for selfPlay_iteration in trange(self.args['num_selfPlay_iterations'] // self.args['num_parallel_games']):
+            for selfPlay_iteration in range(self.args['num_selfPlay_iterations'] // self.args['num_parallel_games']):
                 memory += self.selfPlay()
 
             if rank == 0:
