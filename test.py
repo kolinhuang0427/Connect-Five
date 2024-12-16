@@ -428,7 +428,8 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 model = ResNet(game, 9, 128, device)
 
 optimizer = torch.optim.Adam(model.parameters(), lr=0.001, weight_decay=0.0001)
-
+model.load_state_dict(torch.load('model_5_ConnectFour.pt', map_location=device))
+optimizer.load_state_dict(torch.load('optimizer_5_ConnectFour.pt', map_location=device))
 args = {
     'C': 2,
     'num_searches': 600,
